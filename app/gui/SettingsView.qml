@@ -17,7 +17,7 @@ Flickable {
     boundsBehavior: Flickable.OvershootBounds
 
     contentWidth: settingsColumn1.width > settingsColumn2.width ? settingsColumn1.width : settingsColumn2.width
-    contentHeight: settingsColumn1.height > settingsColumn2.height ? settingsColumn1.height : settingsColumn2.height
+    contentHeight: settingsColumn1.height > settingsColumn2.height ? (settingsColumn1.height + extendSettingsRow.height) : (settingsColumn2.height + extendSettingsRow.height)
 
     ScrollBar.vertical: ScrollBar {
         anchors {
@@ -1346,6 +1346,7 @@ Flickable {
                             updatePref()
                         }
                     }
+
                 }
 
                 CheckBox {
@@ -1717,6 +1718,327 @@ Flickable {
                     ToolTip.visible: hovered
                     ToolTip.text: qsTr("在串流过程中显示精简性能信息") + "\n\n" +
                                   qsTr("你可以使用快捷键Ctrl+Alt+Shift+A or Xbox+B切换完整与精简性能信息显示")
+                }
+            }
+        }
+    }
+    Row{
+        padding: 10
+        id: extendSettingsRow
+        width: settingsPage.width
+        anchors.top: settingsColumn1.bottom
+        rightPadding: 20
+        spacing: 15
+
+        GroupBox {
+            id: razerCotexSettingsGroupBox
+            width: (parent.width - (parent.leftPadding + parent.rightPadding))
+            padding: 12
+            title: "雷游设置："
+            font.pointSize: 12
+
+            Column {
+                anchors.fill: parent
+                spacing: 5
+
+                CheckBox {
+                    id: virtualDisplayEnableCheck
+                    width: parent.width
+                    text: "启用虚拟显示器"
+                    font.pointSize: 12
+                    checked: StreamingPreferences.enableRazerVirtualDisplay
+                    onCheckedChanged: {
+                        StreamingPreferences.enableRazerVirtualDisplay = checked
+                    }
+
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 5000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("将基础设置的分辨率和帧率作为参数启用雷游自带的虚拟显示器作为显示设备")
+                }
+
+                Label {
+                    width: parent.width
+                    id: virtualDisplayFPStitle
+                    text: qsTr("虚拟显示器模式和UI缩放：")
+                    font.pointSize: 12
+                    wrapMode: Text.Wrap
+                }
+
+                Row {
+                    spacing: 5
+                    width: parent.width
+
+                    AutoResizingComboBox {
+                        // ignore setting the index at first, and actually set it when the component is loaded
+                        Component.onCompleted: {
+                            if (!visible) {
+                                // Do nothing if the control won't even be visible
+                                return
+                            }
+
+                            var saved_virtualDisplaymode = StreamingPreferences.razerVirtualDisplayMode
+                            currentIndex = 0
+                            for (var i = 0; i < virtualDisplayModeModel.count; i++) {
+                                var el_mode = virtualDisplayModeModel.get(i).val;
+                                if (saved_virtualDisplaymode === el_mode) {
+                                    currentIndex = i
+                                    break
+                                }
+                            }
+
+                            activated(currentIndex)
+                        }
+
+                        enabled: virtualDisplayEnableCheck.checked && virtualDisplayEnableCheck.enabled
+                        textRole: "text"
+                        model: ListModel {
+                            id: virtualDisplayModeModel
+                            ListElement {
+                                text: qsTr("作为拓展显示器")
+                                val: StreamingPreferences.RVD_EXTEND
+                            }
+                            ListElement {
+                                text: qsTr("仅使用虚拟显示器")
+                                val: StreamingPreferences.RVD_ONLY
+                            }
+                        }
+
+                        function updatePref() {
+                            if (!enabled) {
+                                StreamingPreferences.razerVirtualDisplayMode = StreamingPreferences.RVD_OFF
+                            }
+                            else {
+                                StreamingPreferences.razerVirtualDisplayMode = virtualDisplayModeModel.get(currentIndex).val
+                            }
+                        }
+
+                        // ::onActivated must be used, as it only listens for when the index is changed by a human
+                        onActivated: {
+                            updatePref()
+                        }
+
+                        // This handles transition of the checkbox state
+                        onEnabledChanged: {
+                            updatePref()
+                        }
+                    }
+
+                    AutoResizingComboBox {
+                        enabled: virtualDisplayEnableCheck.checked && virtualDisplayEnableCheck.enabled
+                        property int lastIndexValue
+
+                        function updateUIScaleForSelection() {
+                            var selectedUIScale = parseInt(virtualDisplayUIScaleListModel.get(virtualDisplayUIScaleComboBox.currentIndex).ui_Scale)
+                            if (StreamingPreferences.uiScale !== selectedUIScale) {
+                                StreamingPreferences.uiScale = selectedUIScale
+                            }
+
+                            lastIndexValue = currentIndex
+                        }
+
+                        NavigableDialog {
+                            function isInputValid() {
+                                // If we have text that isn't valid, reject the input.
+                                if (!uiScaleField.acceptableInput && uiScaleField.text) {
+                                    return false
+                                }
+
+                                // The textbox needs to have text or placeholder text
+                                if (!uiScaleField.text && !uiScaleField.placeholderText) {
+                                    return false
+                                }
+
+                                return true
+                            }
+
+                            id: virtualDisplayCustomUIScaleDialog
+                            standardButtons: Dialog.Ok | Dialog.Cancel
+                            onOpened: {
+                                // Force keyboard focus on the textbox so keyboard navigation works
+                                uiScaleField.forceActiveFocus()
+
+                                // standardButton() was added in Qt 5.10, so we must check for it first
+                                if (virtualDisplayCustomUIScaleDialog.standardButton) {
+                                    virtualDisplayCustomUIScaleDialog.standardButton(Dialog.Ok).enabled = virtualDisplayCustomUIScaleDialog.isInputValid()
+                                }
+                            }
+
+                            onClosed: {
+                                uiScaleField.clear()
+                            }
+
+                            onRejected: {
+                                virtualDisplayUIScaleComboBox.currentIndex = virtualDisplayUIScaleComboBox.lastIndexValue
+                            }
+
+                            onAccepted: {
+                                // Reject if there's invalid input
+                                if (!isInputValid()) {
+                                    reject()
+                                    return
+                                }
+
+                                var uiScale = uiScaleField.text ? uiScaleField.text : uiScaleField.placeholderText
+
+                                // Find and update the custom entry
+                                for (var i = 0; i < virtualDisplayUIScaleListModel.count; i++) {
+                                    if (virtualDisplayUIScaleListModel.get(i).is_custom) {
+                                        virtualDisplayUIScaleListModel.setProperty(i, "ui_Scale", uiScale)
+                                        virtualDisplayUIScaleListModel.setProperty(i, "text", qsTr("Custom (%1%)").arg(uiScale))
+
+                                        // Now update the bitrate using the custom resolution
+                                        virtualDisplayUIScaleComboBox.currentIndex = i
+                                        virtualDisplayUIScaleComboBox.updateUIScaleForSelection()
+
+                                        // Update the combobox width too
+                                        virtualDisplayUIScaleComboBox.recalculateWidth()
+                                        break
+                                    }
+                                }
+                            }
+
+                            ColumnLayout {
+                                Label {
+                                    text: qsTr("Enter a custom UI Scale:")
+                                    font.bold: true
+                                }
+
+                                RowLayout {
+                                    TextField {
+                                        id: uiScaleField
+                                        maximumLength: 4
+                                        inputMethodHints: Qt.ImhDigitsOnly
+                                        placeholderText: virtualDisplayUIScaleListModel.get(virtualDisplayUIScaleComboBox.currentIndex).ui_Scale
+                                        validator: IntValidator{bottom:10; top:9999}
+                                        focus: true
+
+                                        onTextChanged: {
+                                            // standardButton() was added in Qt 5.10, so we must check for it first
+                                            if (virtualDisplayCustomUIScaleDialog.standardButton) {
+                                                virtualDisplayCustomUIScaleDialog.standardButton(Dialog.Ok).enabled = virtualDisplayCustomUIScaleDialog.isInputValid()
+                                            }
+                                        }
+
+                                        Keys.onReturnPressed: {
+                                            virtualDisplayCustomUIScaleDialog.accept()
+                                        }
+
+                                        Keys.onEnterPressed: {
+                                            virtualDisplayCustomUIScaleDialog.accept()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        function addUIScaleOrdered(virtualDisplayUIScaleListModel, uiScale, description, custom) {
+                            var indexToAdd = 0
+                            for (var j = 0; j < virtualDisplayUIScaleListModel.count; j++) {
+                                var existing_uiScale = parseInt(virtualDisplayUIScaleListModel.get(j).ui_Scale);
+
+                                if (uiScale === existing_uiScale || (custom && virtualDisplayUIScaleListModel.get(j).is_custom)) {
+                                    // Duplicate entry, skip
+                                    indexToAdd = -1
+                                    break
+                                }
+                                else if (uiScale > existing_uiScale) {
+                                    // Candidate entrypoint after this entry
+                                    indexToAdd = j + 1
+                                }
+                            }
+
+                            // Insert this frame rate if it's not a duplicate
+                            if (indexToAdd >= 0) {
+                                // Custom values always go at the end of the list
+                                if (custom) {
+                                    indexToAdd = virtualDisplayUIScaleListModel.count
+                                }
+
+                                virtualDisplayUIScaleListModel.insert(indexToAdd,
+                                                    {
+                                                        "text": description,
+                                                        "ui_Scale": "" + uiScale,
+                                                        "is_custom": custom
+                                                    })
+                            }
+
+                            return indexToAdd
+                        }
+
+                        function reinitialize() {
+                            addUIScaleOrdered(virtualDisplayUIScaleListModel, -1, qsTr("自动计算"), false)
+
+                            var saved_uiScale = StreamingPreferences.uiScale
+                            var found = false
+                            for (var i = 0; i < virtualDisplayUIScaleListModel.count; i++) {
+                                var el_uiScale = parseInt(virtualDisplayUIScaleListModel.get(i).ui_Scale);
+
+                                // Look for a matching frame rate
+                                if (saved_uiScale === el_uiScale) {
+                                    currentIndex = i
+                                    found = true
+                                    break
+                                }
+                            }
+
+                            // If we didn't find one, add a custom frame rate for the current value
+                            if (!found) {
+                                currentIndex = addUIScaleOrdered(virtualDisplayUIScaleListModel, saved_uiScale, qsTr("Custom (%1%)").arg(saved_uiScale), true)
+                            }
+                            else {
+                                addUIScaleOrdered(virtualDisplayUIScaleListModel, "", qsTr("Custom"), true)
+                            }
+
+                            recalculateWidth()
+
+                            lastIndexValue = currentIndex
+                        }
+
+                        // ignore setting the index at first, and actually set it when the component is loaded
+                        Component.onCompleted: {
+                            reinitialize()
+                            languageChanged.connect(reinitialize)
+                        }
+
+                        model: ListModel {
+                            id: virtualDisplayUIScaleListModel
+                            // Other elements may be added at runtime
+                            ListElement {
+                                text: qsTr("100%")
+                                ui_Scale: "100"
+                                is_custom: false
+                            }
+                            ListElement {
+                                text: qsTr("125%")
+                                ui_Scale: "125"
+                                is_custom: false
+                            }
+                            ListElement {
+                                text: qsTr("150%")
+                                ui_Scale: "150"
+                                is_custom: false
+                            }
+                            ListElement {
+                                text: qsTr("175%")
+                                ui_Scale: "175"
+                                is_custom: false
+                            }
+                        }
+
+                        id: virtualDisplayUIScaleComboBox
+                        maximumWidth: parent.width / 2
+                        textRole: "text"
+                        // ::onActivated must be used, as it only listens for when the index is changed by a human
+                        onActivated : {
+                            if (model.get(currentIndex).is_custom) {
+                                virtualDisplayCustomUIScaleDialog.open()
+                            }
+                            else {
+                                updateUIScaleForSelection()
+                            }
+                        }
+                    }
                 }
             }
         }

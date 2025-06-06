@@ -187,6 +187,7 @@ private:
     QString m_OldIgnoreDevicesExcept;
     QStringList m_IgnoreDeviceGuids;
     StreamingPreferences::CaptureSysKeysMode m_CaptureSystemKeysMode;
+    StreamingPreferences::RazerVirtualDisplayMode m_RazerVirtualDisplayMode;
     int m_MouseCursorCapturedVisibilityState;
 
     struct {

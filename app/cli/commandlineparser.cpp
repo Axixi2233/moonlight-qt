@@ -328,6 +328,11 @@ StreamCommandLineParser::StreamCommandLineParser()
         {"fullscreen", StreamingPreferences::CSK_FULLSCREEN},
         {"always",     StreamingPreferences::CSK_ALWAYS},
     };
+    m_RazerVirtualDisplayModeMap = {
+        {"disable",      StreamingPreferences::RVD_OFF},
+        {"extendDisplay", StreamingPreferences::RVD_EXTEND},
+        {"OnlyVirtualDisplay",     StreamingPreferences::RVD_ONLY},
+    };
 }
 
 StreamCommandLineParser::~StreamCommandLineParser()
@@ -374,9 +379,12 @@ void StreamCommandLineParser::parse(const QStringList &args, StreamingPreference
     parser.addToggleOption("keep-awake", "prevent display sleep while streaming");
     parser.addToggleOption("performance-overlay", "show performance overlay");
     parser.addToggleOption("performance-overlay-lite", "show performance overlay lite");
+    parser.addToggleOption("razer-virtualDisplay-enable", "enable razer virtual display");
+    parser.addToggleOption("razer-virtualDisplay-uiScale", "razer virtual display UI scale value");
     parser.addToggleOption("hdr", "HDR streaming");
     parser.addToggleOption("yuv444", "YUV 4:4:4 sampling, if supported");
     parser.addChoiceOption("capture-system-keys", "capture system key combos", m_CaptureSysKeysModeMap.keys());
+    parser.addChoiceOption("razer-virtualDisplay-mode", "razer virtual display mode", m_RazerVirtualDisplayModeMap.keys());
     parser.addChoiceOption("video-codec", "video codec", m_VideoCodecMap.keys());
     parser.addChoiceOption("video-decoder", "video decoder", m_VideoDecoderMap.keys());
 
@@ -496,6 +504,10 @@ void StreamCommandLineParser::parse(const QStringList &args, StreamingPreference
     // Resolve --performance-overlay and --no-performance-overlay options
     preferences->showPerformanceOverlayLite = parser.getToggleOptionValue("performance-overlay-lite", preferences->showPerformanceOverlayLite);
 
+    preferences->enableRazerVirtualDisplay = parser.getToggleOptionValue("razer-virtualDisplay-enable", preferences->enableRazerVirtualDisplay);
+
+    preferences->uiScale = parser.getToggleOptionValue("razer-virtualDisplay-uiScale", preferences->uiScale);
+
     // Resolve --hdr and --no-hdr options
     preferences->enableHdr = parser.getToggleOptionValue("hdr", preferences->enableHdr);
 
@@ -505,6 +517,10 @@ void StreamCommandLineParser::parse(const QStringList &args, StreamingPreference
     // Resolve --capture-system-keys option
     if (parser.isSet("capture-system-keys")) {
         preferences->captureSysKeysMode = mapValue(m_CaptureSysKeysModeMap, parser.getChoiceOptionValue("capture-system-keys"));
+    }
+
+    if (parser.isSet("razer-virtualDisplay-mode")) {
+        preferences->razerVirtualDisplayMode = mapValue(m_RazerVirtualDisplayModeMap, parser.getChoiceOptionValue("razer-virtualDisplay-mode"));
     }
 
     // Resolve --video-codec option

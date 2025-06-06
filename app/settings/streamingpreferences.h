@@ -105,10 +105,19 @@ public:
     };
     Q_ENUM(CaptureSysKeysMode);
 
+    enum RazerVirtualDisplayMode
+    {
+        RVD_OFF,
+        RVD_EXTEND,
+        RVD_ONLY,
+    };
+    Q_ENUM(RazerVirtualDisplayMode);
+
     Q_PROPERTY(int width MEMBER width NOTIFY displayModeChanged)
     Q_PROPERTY(int height MEMBER height NOTIFY displayModeChanged)
     Q_PROPERTY(int fps MEMBER fps NOTIFY displayModeChanged)
     Q_PROPERTY(int bitrateKbps MEMBER bitrateKbps NOTIFY bitrateChanged)
+    Q_PROPERTY(int uiScale MEMBER uiScale NOTIFY uiScaleChanged)
     Q_PROPERTY(bool unlockBitrate MEMBER unlockBitrate NOTIFY unlockBitrateChanged)
     Q_PROPERTY(bool enableVsync MEMBER enableVsync NOTIFY enableVsyncChanged)
     Q_PROPERTY(bool gameOptimizations MEMBER gameOptimizations NOTIFY gameOptimizationsChanged)
@@ -124,7 +133,8 @@ public:
     Q_PROPERTY(bool gamepadMouse MEMBER gamepadMouse NOTIFY gamepadMouseChanged)
     Q_PROPERTY(bool detectNetworkBlocking MEMBER detectNetworkBlocking NOTIFY detectNetworkBlockingChanged)
     Q_PROPERTY(bool showPerformanceOverlay MEMBER showPerformanceOverlay NOTIFY showPerformanceOverlayChanged)
-    Q_PROPERTY(bool showPerformanceOverlayLite MEMBER showPerformanceOverlayLite NOTIFY showPerformanceOverlayChanged)
+    Q_PROPERTY(bool showPerformanceOverlayLite MEMBER showPerformanceOverlayLite NOTIFY showPerformanceOverlayLiteChanged)
+    Q_PROPERTY(bool enableRazerVirtualDisplay MEMBER enableRazerVirtualDisplay NOTIFY enableRazerVirtualDisplayChanged)
     Q_PROPERTY(AudioConfig audioConfig MEMBER audioConfig NOTIFY audioConfigChanged)
     Q_PROPERTY(VideoCodecConfig videoCodecConfig MEMBER videoCodecConfig NOTIFY videoCodecConfigChanged)
     Q_PROPERTY(bool enableHdr MEMBER enableHdr NOTIFY enableHdrChanged)
@@ -140,6 +150,7 @@ public:
     Q_PROPERTY(bool swapFaceButtons MEMBER swapFaceButtons NOTIFY swapFaceButtonsChanged)
     Q_PROPERTY(bool keepAwake MEMBER keepAwake NOTIFY keepAwakeChanged)
     Q_PROPERTY(CaptureSysKeysMode captureSysKeysMode MEMBER captureSysKeysMode NOTIFY captureSysKeysModeChanged)
+    Q_PROPERTY(RazerVirtualDisplayMode razerVirtualDisplayMode MEMBER razerVirtualDisplayMode NOTIFY razerVirtualDisplayModeChanged)
     Q_PROPERTY(Language language MEMBER language NOTIFY languageChanged);
 
     Q_INVOKABLE bool retranslate();
@@ -148,6 +159,7 @@ public:
     int width;
     int height;
     int fps;
+    int uiScale;
     int bitrateKbps;
     bool unlockBitrate;
     bool enableVsync;
@@ -165,6 +177,7 @@ public:
     bool detectNetworkBlocking;
     bool showPerformanceOverlay;
     bool showPerformanceOverlayLite;
+    bool enableRazerVirtualDisplay;
     bool swapMouseButtons;
     bool muteOnFocusLoss;
     bool backgroundGamepad;
@@ -182,10 +195,12 @@ public:
     UIDisplayMode uiDisplayMode;
     Language language;
     CaptureSysKeysMode captureSysKeysMode;
+    RazerVirtualDisplayMode razerVirtualDisplayMode;
 
 signals:
     void displayModeChanged();
     void bitrateChanged();
+    void uiScaleChanged();
     void unlockBitrateChanged();
     void enableVsyncChanged();
     void gameOptimizationsChanged();
@@ -210,12 +225,14 @@ signals:
     void detectNetworkBlockingChanged();
     void showPerformanceOverlayChanged();
     void showPerformanceOverlayLiteChanged();
+    void enableRazerVirtualDisplayChanged();
     void mouseButtonsChanged();
     void muteOnFocusLossChanged();
     void backgroundGamepadChanged();
     void reverseScrollDirectionChanged();
     void swapFaceButtonsChanged();
     void captureSysKeysModeChanged();
+    void razerVirtualDisplayModeChanged();
     void keepAwakeChanged();
     void languageChanged();
 

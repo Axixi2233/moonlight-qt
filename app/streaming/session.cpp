@@ -1552,7 +1552,10 @@ bool Session::startConnectionAsync()
         NvHTTP http(m_Computer);
         http.startApp(m_Computer->currentGameId != 0 ? "resume" : "launch",
                       m_Computer->isNvidiaServerSoftware,
-                      m_App.id, &m_StreamConfig,
+                      m_App.id,
+                      m_Preferences->razerVirtualDisplayMode,
+                      m_Preferences->uiScale,
+                      &m_StreamConfig,
                       enableGameOptimizations,
                       m_Preferences->playAudioOnHost,
                       m_InputHandler->getAttachedGamepadMask(),
@@ -1971,6 +1974,9 @@ void Session::execInternal()
 
     //设置精简性能信息
     m_OverlayManager.setOverlayStateLite(Overlay::OverlayDebug, m_Preferences->showPerformanceOverlayLite);
+
+    //设置雷游虚拟显示器启动状态
+    m_OverlayManager.setOverlayStateLite(Overlay::OverlayDebug, m_Preferences->enableRazerVirtualDisplay);
 
     // Hijack this thread to be the SDL main thread. We have to do this
     // because we want to suspend all Qt processing until the stream is over.

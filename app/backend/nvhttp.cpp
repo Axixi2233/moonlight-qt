@@ -190,6 +190,8 @@ void
 NvHTTP::startApp(QString verb,
                  bool isGfe,
                  int appId,
+                 int razerVirtualDisplayMode,
+                 int razerVirtualDisplayUIScale,
                  PSTREAM_CONFIGURATION streamConfig,
                  bool sops,
                  bool localAudio,
@@ -224,7 +226,7 @@ NvHTTP::startApp(QString verb,
                                    "&remoteControllersBitmap="+QString::number(gamepadMask)+
                                    "&gcmap="+QString::number(gamepadMask)+
                                    "&gcpersist="+QString::number(persistGameControllersOnDisconnect ? 1 : 0)+
-                                   LiGetLaunchUrlQueryParameters(),
+                                   GetLaunchUrlQueryParameters(streamConfig,razerVirtualDisplayMode,razerVirtualDisplayUIScale),
                                    LAUNCH_TIMEOUT_MS);
 
     qInfo() << "Launch response:" << response;
@@ -233,6 +235,14 @@ NvHTTP::startApp(QString verb,
     verifyResponseStatus(response);
 
     rtspSessionUrl = getXmlString(response, "sessionUrl0");
+}
+
+QString
+NvHTTP::GetLaunchUrlQueryParameters(PSTREAM_CONFIGURATION streamConfig,int razerVirtualDisplayMode,int uiScale) {
+    //return "&virtualDisplay=2&virtualDisplayMode=2736x1824x60&UIScale=200";
+    return "&virtualDisplay=" + QString::number(razerVirtualDisplayMode) +
+           "&virtualDisplayMode=" + QString::number(streamConfig->width) + "x" + QString::number(streamConfig->height) + "x" + QString::number(streamConfig->fps) +
+           (uiScale == -1 ? "" : "&UIScale=" + QString::number(uiScale));
 }
 
 void

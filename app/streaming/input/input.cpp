@@ -21,6 +21,7 @@ SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, i
       m_PointerRegionLockToggledByUser(false),
       m_FakeCaptureActive(false),
       m_CaptureSystemKeysMode(prefs.captureSysKeysMode),
+      m_RazerVirtualDisplayMode(prefs.razerVirtualDisplayMode),
       m_MouseCursorCapturedVisibilityState(SDL_DISABLE),
       m_LongPressTimer(0),
       m_StreamWidth(streamWidth),

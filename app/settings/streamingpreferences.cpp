@@ -14,6 +14,7 @@
 #define SER_WIDTH "width"
 #define SER_HEIGHT "height"
 #define SER_FPS "fps"
+#define SER_UISCALE "uiScale"
 #define SER_BITRATE "bitrate"
 #define SER_UNLOCK_BITRATE "unlockbitrate"
 #define SER_FULLSCREEN "fullscreen"
@@ -42,12 +43,14 @@
 #define SER_DETECTNETBLOCKING "detectnetblocking"
 #define SER_SHOWPERFOVERLAY "showperfoverlay"
 #define SER_SHOWPERFOVERLAYLITE "showperfoverlayLite"
+#define SER_ENABLERAZERVIRTUALDISPLAY "enableRazerVirtualDisplay"
 #define SER_SWAPMOUSEBUTTONS "swapmousebuttons"
 #define SER_MUTEONFOCUSLOSS "muteonfocusloss"
 #define SER_BACKGROUNDGAMEPAD "backgroundgamepad"
 #define SER_REVERSESCROLL "reversescroll"
 #define SER_SWAPFACEBUTTONS "swapfacebuttons"
 #define SER_CAPTURESYSKEYS "capturesyskeys"
+#define SER_RAZERVIRTUALDISPLAYMODE "razervirtualdisplaymode"
 #define SER_KEEPAWAKE "keepawake"
 #define SER_LANGUAGE "language"
 
@@ -120,6 +123,7 @@ void StreamingPreferences::reload()
     width = settings.value(SER_WIDTH, 1280).toInt();
     height = settings.value(SER_HEIGHT, 720).toInt();
     fps = settings.value(SER_FPS, 60).toInt();
+    uiScale = settings.value(SER_UISCALE, -1).toInt();
     enableYUV444 = settings.value(SER_YUV444, false).toBool();
     bitrateKbps = settings.value(SER_BITRATE, getDefaultBitrate(width, height, fps, enableYUV444)).toInt();
     unlockBitrate = settings.value(SER_UNLOCK_BITRATE, false).toBool();
@@ -138,6 +142,7 @@ void StreamingPreferences::reload()
     detectNetworkBlocking = settings.value(SER_DETECTNETBLOCKING, true).toBool();
     showPerformanceOverlay = settings.value(SER_SHOWPERFOVERLAY, false).toBool();
     showPerformanceOverlayLite = settings.value(SER_SHOWPERFOVERLAYLITE, true).toBool();
+    enableRazerVirtualDisplay = settings.value(SER_ENABLERAZERVIRTUALDISPLAY, true).toBool();
     packetSize = settings.value(SER_PACKETSIZE, 0).toInt();
     swapMouseButtons = settings.value(SER_SWAPMOUSEBUTTONS, false).toBool();
     muteOnFocusLoss = settings.value(SER_MUTEONFOCUSLOSS, false).toBool();
@@ -148,6 +153,8 @@ void StreamingPreferences::reload()
     enableHdr = settings.value(SER_HDR, false).toBool();
     captureSysKeysMode = static_cast<CaptureSysKeysMode>(settings.value(SER_CAPTURESYSKEYS,
                                                          static_cast<int>(CaptureSysKeysMode::CSK_OFF)).toInt());
+    razerVirtualDisplayMode = static_cast<RazerVirtualDisplayMode>(settings.value(SER_RAZERVIRTUALDISPLAYMODE,
+                                                                        static_cast<int>(RazerVirtualDisplayMode::RVD_ONLY)).toInt());
     audioConfig = static_cast<AudioConfig>(settings.value(SER_AUDIOCFG,
                                                   static_cast<int>(AudioConfig::AC_STEREO)).toInt());
     videoCodecConfig = static_cast<VideoCodecConfig>(settings.value(SER_VIDEOCFG,

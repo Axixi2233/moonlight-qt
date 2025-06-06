@@ -161,10 +161,15 @@ public:
     void
     quitApp();
 
+    QString
+    GetLaunchUrlQueryParameters(PSTREAM_CONFIGURATION streamConfig,int razerVirtualDisplayMode,int uiScale);
+
     void
     startApp(QString verb,
              bool isGfe,
              int appId,
+             int razerVirtualDisplayMode,
+             int razerVirtualDisplayUIScale,
              PSTREAM_CONFIGURATION streamConfig,
              bool sops,
              bool localAudio,

@@ -32,7 +32,6 @@ public:
     Q_INVOKABLE QRect getNativeResolution(int displayIndex);
     Q_INVOKABLE QRect getSafeAreaResolution(int displayIndex);
     Q_INVOKABLE int getRefreshRate(int displayIndex);
-
 signals:
     void unmappedGamepadsChanged();
 
