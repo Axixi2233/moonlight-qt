@@ -38,7 +38,7 @@ CenteredGridView {
         activated = true
 
         // Highlight the first item if a gamepad is connected
-        if (currentIndex == -1 && SdlGamepadKeyNavigation.getConnectedGamepads() > 0) {
+        if (currentIndex === -1 && SdlGamepadKeyNavigation.getConnectedGamepads() > 0) {
             currentIndex = 0
         }
 
@@ -94,9 +94,9 @@ CenteredGridView {
                 // the image size checks if this is not an app collector game. We know the officially
                 // supported games all have box art, so this check is not required.
                 if (!model.isAppCollectorGame &&
-                    ((sourceSize.width == 130 && sourceSize.height == 180) || // GFE 2.0 placeholder image
-                     (sourceSize.width == 628 && sourceSize.height == 888) || // GFE 3.0 placeholder image
-                     (sourceSize.width == 200 && sourceSize.height == 266)))  // Our no_app_image.png
+                    ((sourceSize.width === 130 && sourceSize.height === 180) || // GFE 2.0 placeholder image
+                     (sourceSize.width === 628 && sourceSize.height === 888) || // GFE 3.0 placeholder image
+                     (sourceSize.width === 200 && sourceSize.height === 266)))  // Our no_app_image.png
                 {
                     isPlaceholder = true
                 }
@@ -123,20 +123,18 @@ CenteredGridView {
 
             sourceComponent: Item {
                 RoundButton {
+                    // Don't steal focus from the toolbar buttons
+                    focusPolicy: Qt.NoFocus
+
                     anchors.horizontalCenterOffset: appIcon.isPlaceholder ? -47 : 0
                     anchors.verticalCenterOffset: appIcon.isPlaceholder ? -75 : -60
                     anchors.centerIn: parent
                     implicitWidth: 85
                     implicitHeight: 85
 
-                    Image {
-                        source: "qrc:/res/play_arrow_FILL1_wght700_GRAD200_opsz48.svg"
-                        anchors.centerIn: parent
-                        sourceSize {
-                            width: 75
-                            height: 75
-                        }
-                    }
+                    icon.source: "qrc:/res/play_arrow_FILL1_wght700_GRAD200_opsz48.svg"
+                    icon.width: 75
+                    icon.height: 75
 
                     onClicked: {
                         launchOrResumeSelectedApp(true)
@@ -151,20 +149,18 @@ CenteredGridView {
                 }
 
                 RoundButton {
+                    // Don't steal focus from the toolbar buttons
+                    focusPolicy: Qt.NoFocus
+
                     anchors.horizontalCenterOffset: appIcon.isPlaceholder ? 47 : 0
                     anchors.verticalCenterOffset: appIcon.isPlaceholder ? -75 : 60
                     anchors.centerIn: parent
                     implicitWidth: 85
                     implicitHeight: 85
 
-                    Image {
-                        source: "qrc:/res/stop_FILL1_wght700_GRAD200_opsz48.svg"
-                        anchors.centerIn: parent
-                        sourceSize {
-                            width: 75
-                            height: 75
-                        }
-                    }
+                    icon.source: "qrc:/res/stop_FILL1_wght700_GRAD200_opsz48.svg"
+                    icon.width: 75
+                    icon.height: 75
 
                     onClicked: {
                         doQuitGame()
@@ -298,19 +294,17 @@ CenteredGridView {
             asynchronous: true
             sourceComponent: NavigableMenu {
                 id: appContextMenu
+                initiator: appContextMenuLoader.parent
                 NavigableMenuItem {
-                    parentMenu: appContextMenu
                     text: model.running ? qsTr("Resume Game") : qsTr("Launch Game")
                     onTriggered: launchOrResumeSelectedApp(true)
                 }
                 NavigableMenuItem {
-                    parentMenu: appContextMenu
                     text: qsTr("Quit Game")
                     onTriggered: doQuitGame()
                     visible: model.running
                 }
                 NavigableMenuItem {
-                    parentMenu: appContextMenu
                     checkable: true
                     checked: model.directLaunch
                     text: qsTr("Direct Launch")
@@ -323,7 +317,6 @@ CenteredGridView {
                     ToolTip.visible: hovered
                 }
                 NavigableMenuItem {
-                    parentMenu: appContextMenu
                     checkable: true
                     checked: model.hidden
                     text: qsTr("Hide Game")
@@ -336,6 +329,19 @@ CenteredGridView {
                     ToolTip.visible: hovered
                 }
             }
+        }
+    }
+
+    Row {
+        anchors.centerIn: parent
+        spacing: 5
+        visible: appGrid.count === 0
+
+        Label {
+            text: qsTr("This computer doesn't seem to have any applications or some applications are hidden")
+            font.pointSize: 20
+            verticalAlignment: Text.AlignVCenter
+            wrapMode: Text.Wrap
         }
     }
 

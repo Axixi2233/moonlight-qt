@@ -43,6 +43,7 @@ public:
 
 private:
     void notifyOverlayUpdated(OverlayType type);
+    SDL_Surface* RenderTextOutlinedWrapped(TTF_Font* font, const char* text, SDL_Color textColor, SDL_Color outlineColor, int outlineWidth, int wrapWidth);
 
     struct {
         bool enabled;
@@ -50,7 +51,7 @@ private:
         SDL_Color color;
         SDL_Color bgcolor;
         bool enabledLite;
-        char text[512];
+        char text[1024];
 
         TTF_Font* font;
         SDL_Surface* surface;

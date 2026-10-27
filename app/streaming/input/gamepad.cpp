@@ -3,6 +3,7 @@
 #include <Limelight.h>
 #include "SDL_compat.h"
 #include "settings/mappingmanager.h"
+#include "utils.h"
 
 #include <QtMath>
 
@@ -188,6 +189,26 @@ Uint32 SdlInputHandler::mouseEmulationTimerCallback(Uint32 interval, void *param
     return interval;
 }
 
+static void updateAnalogStickAxis(short& value, short newValue, bool& dirty)
+{
+#ifdef STEAM_LINK
+    // Use a deadzone on Steam Link to reduce CPU usage from idle joysticks
+    newValue = abs(newValue) < 1500 ? 0 : newValue;
+#endif
+    dirty |= (newValue != value);
+    value = newValue;
+}
+
+static void updateTriggerAxis(unsigned char& value, unsigned char newValue, bool& dirty)
+{
+#ifdef STEAM_LINK
+    // Use a deadzone on Steam Link to reduce CPU usage from idle joysticks
+    newValue = newValue < 10 ? 0 : newValue;
+#endif
+    dirty |= (newValue != value);
+    value = newValue;
+}
+
 void SdlInputHandler::handleControllerAxisEvent(SDL_ControllerAxisEvent* event)
 {
     SDL_JoystickID gameControllerId = event->which;
@@ -198,11 +219,12 @@ void SdlInputHandler::handleControllerAxisEvent(SDL_ControllerAxisEvent* event)
 
     // Batch all pending axis motion events for this gamepad to save CPU time
     SDL_Event nextEvent;
+    bool dirty = false;
     for (;;) {
         switch (event->axis)
         {
             case SDL_CONTROLLER_AXIS_LEFTX:
-                state->lsX = event->value;
+                updateAnalogStickAxis(state->lsX, event->value, dirty);
                 break;
             case SDL_CONTROLLER_AXIS_LEFTY:
                 // Signed values have one more negative value than
@@ -210,19 +232,19 @@ void SdlInputHandler::handleControllerAxisEvent(SDL_ControllerAxisEvent* event)
                 // could actually cause the value to overflow and
                 // wrap around to be negative again. Avoid that by
                 // capping the value at 32767.
-                state->lsY = -qMax(event->value, (short)-32767);
+                updateAnalogStickAxis(state->lsY, -qMax(event->value, (short)-32767), dirty);
                 break;
             case SDL_CONTROLLER_AXIS_RIGHTX:
-                state->rsX = event->value;
+                updateAnalogStickAxis(state->rsX, event->value, dirty);
                 break;
             case SDL_CONTROLLER_AXIS_RIGHTY:
-                state->rsY = -qMax(event->value, (short)-32767);
+                updateAnalogStickAxis(state->rsY, -qMax(event->value, (short)-32767), dirty);
                 break;
             case SDL_CONTROLLER_AXIS_TRIGGERLEFT:
-                state->lt = (unsigned char)(event->value * 255UL / 32767);
+                updateTriggerAxis(state->lt, (unsigned char)(event->value * 255UL / 32767), dirty);
                 break;
             case SDL_CONTROLLER_AXIS_TRIGGERRIGHT:
-                state->rt = (unsigned char)(event->value * 255UL / 32767);
+                updateTriggerAxis(state->rt, (unsigned char)(event->value * 255UL / 32767), dirty);
                 break;
             default:
                 SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
@@ -247,7 +269,7 @@ void SdlInputHandler::handleControllerAxisEvent(SDL_ControllerAxisEvent* event)
     }
 
     // Only send the gamepad state to the host if it's not in mouse emulation mode
-    if (state->mouseEmulationTimer == 0) {
+    if (state->mouseEmulationTimer == 0 && dirty) {
         sendGamepadState(state);
     }
 }
@@ -494,7 +516,9 @@ void SdlInputHandler::handleControllerTouchpadEvent(SDL_ControllerTouchpadEvent*
         return;
     }
 
-    LiSendControllerTouchEvent((uint8_t)state->index, eventType, event->finger, event->x, event->y, event->pressure);
+    LiSendControllerTouchEvent2((uint8_t)state->index, eventType,
+                                (uint8_t)event->touchpad, event->finger,
+                                event->x, event->y, event->pressure);
 }
 
 #endif
@@ -696,6 +720,9 @@ void SdlInputHandler::handleControllerDeviceEvent(SDL_ControllerDeviceEvent* eve
         }
         if (SDL_GameControllerGetNumTouchpads(state->controller) > 0) {
             capabilities |= LI_CCAP_TOUCHPAD;
+            if (SDL_GameControllerGetNumTouchpads(state->controller) > 1) {
+                capabilities |= LI_CCAP_DUAL_TOUCHPAD;
+            }
         }
         if (SDL_GameControllerHasSensor(state->controller, SDL_SENSOR_ACCEL)) {
             capabilities |= LI_CCAP_ACCEL;
@@ -730,7 +757,32 @@ void SdlInputHandler::handleControllerDeviceEvent(SDL_ControllerDeviceEvent* eve
             type = LI_CTYPE_NINTENDO;
             break;
         default:
-            type = LI_CTYPE_UNKNOWN;
+            // These Steam Controller VID/PID combos come from SDL's controller_list.h
+            // TODO: Use SDL_GAMEPAD_TYPE_STEAM on SDL 3.6+
+            if (vendorId == 0x28de) {
+                switch (productId) {
+                case 0x1101:
+                case 0x1102:
+                case 0x1105:
+                case 0x1106:
+                case 0x1142:
+                case 0x1201:
+                case 0x1202:
+                case 0x1205:
+                case 0x1302:
+                case 0x1303:
+                case 0x1304:
+                case 0x1305:
+                    type = LI_CTYPE_STEAM;
+                    break;
+                default:
+                    type = LI_CTYPE_UNKNOWN;
+                    break;
+                }
+            }
+            else {
+                type = LI_CTYPE_UNKNOWN;
+            }
             break;
         }
 
@@ -901,6 +953,15 @@ void SdlInputHandler::setMotionEventState(uint16_t controllerNumber, uint8_t mot
         return;
     }
 
+    uint16_t reportRateHzLimit;
+    if (Utils::getEnvironmentVariableOverride("SENSOR_REPORT_RATE_LIMIT_HZ", &reportRateHzLimit) &&
+        reportRateHz > reportRateHzLimit) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Sensor report rate limited to %u Hz by environment variable",
+                    reportRateHzLimit);
+        reportRateHz = reportRateHzLimit;
+    }
+
 #if SDL_VERSION_ATLEAST(2, 0, 14)
     if (m_GamepadState[controllerNumber].controller != nullptr) {
         uint8_t reportPeriodMs = reportRateHz ? (1000 / reportRateHz) : 0;
@@ -932,6 +993,22 @@ void SdlInputHandler::setControllerLED(uint16_t controllerNumber, uint8_t r, uin
         SDL_GameControllerSetLED(m_GamepadState[controllerNumber].controller, r, g, b);
     }
 #endif
+}
+
+void SdlInputHandler::setAdaptiveTriggers(uint16_t controllerNumber, DualSenseOutputReport *report){
+
+#if SDL_VERSION_ATLEAST(2, 0, 16)
+        // Make sure the controller number is within our supported count
+    if (controllerNumber <= MAX_GAMEPADS &&
+        // and we have a valid controller
+        m_GamepadState[controllerNumber].controller != nullptr &&
+        // and it's a PS5 controller
+        SDL_GameControllerGetType(m_GamepadState[controllerNumber].controller) == SDL_CONTROLLER_TYPE_PS5) {
+        SDL_GameControllerSendEffect(m_GamepadState[controllerNumber].controller, report, sizeof(*report));
+    }
+#endif
+
+    SDL_free(report);
 }
 
 QString SdlInputHandler::getUnmappedGamepads()

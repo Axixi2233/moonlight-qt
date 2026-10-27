@@ -4,6 +4,7 @@
 #include <QQueue>
 #include <set>
 
+#include "../bandwidth.h"
 #include "decoder.h"
 #include "ffmpeg-renderers/renderer.h"
 #include "ffmpeg-renderers/pacer/pacer.h"
@@ -32,10 +33,21 @@ public:
     virtual IFFmpegRenderer* getBackendRenderer();
 
 private:
+    enum class TestMode {
+        // No test frame and prepare for rendering
+        NoTesting,
+
+        // Submit only the test frame and do not prepare for rendering
+        TestFrameOnly,
+
+        // Submit the test frame and prepare for rendering
+        TestFrame
+    };
+
     bool completeInitialization(const AVCodec* decoder,
                                 enum AVPixelFormat requiredFormat,
                                 PDECODER_PARAMETERS params,
-                                bool testFrame,
+                                TestMode testMode,
                                 bool useAlternateFrontend);
 
     void stringifyVideoStats(VIDEO_STATS& stats, char* output, int length);
@@ -74,9 +86,11 @@ private:
                                IFFmpegRenderer::InitFailureReason* failureReason,
                                std::function<IFFmpegRenderer*()> createRendererFunc);
 
-    static IFFmpegRenderer* createHwAccelRenderer(const AVCodecHWConfig* hwDecodeCfg, int pass);
+    static IFFmpegRenderer* createHwAccelRenderer(const AVCodecHWConfig* hwDecodeCfg, PDECODER_PARAMETERS params, int pass);
 
     bool initializeRendererInternal(IFFmpegRenderer* renderer, PDECODER_PARAMETERS params);
+
+    static bool isSeparateTestDecoderRequired(const AVCodec* decoder);
 
     void reset();
 
@@ -99,6 +113,7 @@ private:
     IFFmpegRenderer* m_FrontendRenderer;
     int m_ConsecutiveFailedDecodes;
     Pacer* m_Pacer;
+    BandwidthTracker m_BwTracker;
     VIDEO_STATS m_ActiveWndVideoStats;
     VIDEO_STATS m_LastWndVideoStats;
     VIDEO_STATS m_GlobalVideoStats;
@@ -109,9 +124,12 @@ private:
 
     int m_LastFrameNumber;
     int m_StreamFps;
+    int m_OriginalVideoWidth;
+    int m_OriginalVideoHeight;
     int m_VideoFormat;
     bool m_NeedsSpsFixup;
     bool m_TestOnly;
+    TestMode m_CurrentTestMode;
     SDL_Thread* m_DecoderThread;
     SDL_atomic_t m_DecoderThreadShouldQuit;
 

@@ -16,9 +16,9 @@ public:
     virtual void prepareToRender() override;
     virtual void renderFrame(AVFrame* frame) override;
     virtual enum AVPixelFormat getPreferredPixelFormat(int videoFormat) override;
-    virtual bool needsTestFrame() override;
     virtual int getRendererAttributes() override;
     virtual int getDecoderColorspace() override;
+    virtual int getDecoderColorRange() override;
 
 private:
     static void InputPortCallback(MMAL_PORT_T* port, MMAL_BUFFER_HEADER_T* buffer);

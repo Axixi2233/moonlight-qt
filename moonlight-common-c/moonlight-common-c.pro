@@ -40,9 +40,7 @@ unix:!macx {
 
 COMMON_C_DIR = $$PWD/moonlight-common-c
 ENET_DIR = $$COMMON_C_DIR/enet
-RS_DIR = $$COMMON_C_DIR/reedsolomon
 SOURCES += \
-    $$RS_DIR/rs.c \
     $$ENET_DIR/callbacks.c \
     $$ENET_DIR/compress.c \
     $$ENET_DIR/host.c \
@@ -52,6 +50,9 @@ SOURCES += \
     $$ENET_DIR/protocol.c \
     $$ENET_DIR/unix.c \
     $$ENET_DIR/win32.c \
+    $$COMMON_C_DIR/nanors/deps/obl/oblas_common.c \
+    $$COMMON_C_DIR/nanors/deps/obl/oblas_lite.c \
+    $$COMMON_C_DIR/nanors/rs.c \
     $$COMMON_C_DIR/src/AudioStream.c \
     $$COMMON_C_DIR/src/ByteBuffer.c \
     $$COMMON_C_DIR/src/Connection.c \
@@ -75,9 +76,11 @@ SOURCES += \
 HEADERS += \
     $$COMMON_C_DIR/src/Limelight.h
 INCLUDEPATH += \
-    $$RS_DIR \
     $$ENET_DIR/include \
-    $$COMMON_C_DIR/src
+    $$COMMON_C_DIR/src \
+    $$COMMON_C_DIR/nanors \
+    $$COMMON_C_DIR/nanors/deps \
+    $$COMMON_C_DIR/nanors/deps/obl
 DEFINES += HAS_SOCKLEN_T
 
 CONFIG(debug, debug|release) {

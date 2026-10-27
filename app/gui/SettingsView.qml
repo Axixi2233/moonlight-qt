@@ -281,11 +281,13 @@ Flickable {
                                 StreamingPreferences.width = selectedWidth
                                 StreamingPreferences.height = selectedHeight
 
-                                StreamingPreferences.bitrateKbps = StreamingPreferences.getDefaultBitrate(StreamingPreferences.width,
-                                                                                                          StreamingPreferences.height,
-                                                                                                          StreamingPreferences.fps,
-                                                                                                          StreamingPreferences.enableYUV444);
-                                slider.value = StreamingPreferences.bitrateKbps
+                                if (StreamingPreferences.autoAdjustBitrate) {
+                                    StreamingPreferences.bitrateKbps = StreamingPreferences.getDefaultBitrate(StreamingPreferences.width,
+                                                                                                              StreamingPreferences.height,
+                                                                                                              StreamingPreferences.fps,
+                                                                                                              StreamingPreferences.enableYUV444);
+                                    slider.value = StreamingPreferences.bitrateKbps
+                                }
                             }
 
                             lastIndexValue = currentIndex
@@ -447,11 +449,13 @@ Flickable {
                             if (StreamingPreferences.fps !== selectedFps) {
                                 StreamingPreferences.fps = selectedFps
 
-                                StreamingPreferences.bitrateKbps = StreamingPreferences.getDefaultBitrate(StreamingPreferences.width,
-                                                                                                          StreamingPreferences.height,
-                                                                                                          StreamingPreferences.fps,
-                                                                                                          StreamingPreferences.enableYUV444);
-                                slider.value = StreamingPreferences.bitrateKbps
+                                if (StreamingPreferences.autoAdjustBitrate) {
+                                    StreamingPreferences.bitrateKbps = StreamingPreferences.getDefaultBitrate(StreamingPreferences.width,
+                                                                                                              StreamingPreferences.height,
+                                                                                                              StreamingPreferences.fps,
+                                                                                                              StreamingPreferences.enableYUV444);
+                                    slider.value = StreamingPreferences.bitrateKbps
+                                }
                             }
 
                             lastIndexValue = currentIndex
@@ -678,26 +682,47 @@ Flickable {
                     wrapMode: Text.Wrap
                 }
 
-                Slider {
-                    id: slider
+                Row {
+                    width: parent.width
+                    spacing: 5
 
-                    value: StreamingPreferences.bitrateKbps
+                    Slider {
+                        id: slider
 
-                    stepSize: 500
-                    from : 500
-                    to: StreamingPreferences.unlockBitrate ? 1000000 : 150000
+                        value: StreamingPreferences.bitrateKbps
 
-                    snapMode: "SnapOnRelease"
-                    width: Math.min(bitrateDesc.implicitWidth, parent.width)
+                        stepSize: 500
+                        from : 500
+                        to: StreamingPreferences.unlockBitrate ? 1000000 : 150000
 
-                    onValueChanged: {
-                        bitrateTitle.text = qsTr("Video bitrate: %1 Mbps").arg(value / 1000.0)
-                        StreamingPreferences.bitrateKbps = value
+                        snapMode: "SnapOnRelease"
+                        width: Math.min(bitrateDesc.implicitWidth, parent.width - (resetBitrateButton.visible ? resetBitrateButton.width + parent.spacing : 0))
+
+                        onValueChanged: {
+                            bitrateTitle.text = qsTr("Video bitrate: %1 Mbps").arg(value / 1000.0)
+                            StreamingPreferences.bitrateKbps = value
+                        }
+
+                        onMoved: {
+                            StreamingPreferences.autoAdjustBitrate = false
+                        }
+
+                        Component.onCompleted: {
+                            // Refresh the text after translations change
+                            languageChanged.connect(valueChanged)
+                        }
                     }
 
-                    Component.onCompleted: {
-                        // Refresh the text after translations change
-                        languageChanged.connect(valueChanged)
+                    Button {
+                        id: resetBitrateButton
+                        text: qsTr("Use Default (%1 Mbps)").arg(StreamingPreferences.getDefaultBitrate(StreamingPreferences.width, StreamingPreferences.height, StreamingPreferences.fps, StreamingPreferences.enableYUV444) / 1000.0)
+                        visible: StreamingPreferences.bitrateKbps !== StreamingPreferences.getDefaultBitrate(StreamingPreferences.width, StreamingPreferences.height, StreamingPreferences.fps, StreamingPreferences.enableYUV444)
+                        onClicked: {
+                            var defaultBitrate = StreamingPreferences.getDefaultBitrate(StreamingPreferences.width, StreamingPreferences.height, StreamingPreferences.fps, StreamingPreferences.enableYUV444)
+                            StreamingPreferences.bitrateKbps = defaultBitrate
+                            StreamingPreferences.autoAdjustBitrate = true
+                            slider.value = defaultBitrate
+                        }
                     }
                 }
 
@@ -787,38 +812,64 @@ Flickable {
                     ToolTip.text: qsTr("Fullscreen generally provides the best performance, but borderless windowed may work better with features like macOS Spaces, Alt+Tab, screenshot tools, on-screen overlays, etc.")
                 }
 
-                CheckBox {
-                    id: vsyncCheck
+                Row {
+                    spacing: 5
                     width: parent.width
-                    hoverEnabled: true
-                    text: qsTr("V-Sync")
-                    font.pointSize:  12
-                    checked: StreamingPreferences.enableVsync
-                    onCheckedChanged: {
-                        StreamingPreferences.enableVsync = checked
+
+                    CheckBox {
+                        id: vsyncCheck
+                        hoverEnabled: true
+                        text: qsTr("V-Sync")
+                        font.pointSize:  12
+                        checked: StreamingPreferences.enableVsync
+                        onCheckedChanged: {
+                            StreamingPreferences.enableVsync = checked
+                        }
+
+                        ToolTip.delay: 1000
+                        ToolTip.timeout: 5000
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Disabling V-Sync allows sub-frame rendering latency, but it can display visible tearing")
                     }
 
-                    ToolTip.delay: 1000
-                    ToolTip.timeout: 5000
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Disabling V-Sync allows sub-frame rendering latency, but it can display visible tearing")
+                    CheckBox {
+                        id: framePacingCheck
+                        hoverEnabled: true
+                        text: qsTr("Frame pacing")
+                        font.pointSize:  12
+                        enabled: StreamingPreferences.enableVsync
+                        checked: StreamingPreferences.enableVsync && StreamingPreferences.framePacing
+                        onCheckedChanged: {
+                            StreamingPreferences.framePacing = checked
+                        }
+                        ToolTip.delay: 1000
+                        ToolTip.timeout: 5000
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Frame pacing reduces micro-stutter by delaying frames that come in too early")
+                    }
                 }
 
                 CheckBox {
-                    id: framePacingCheck
+                    id: enableHdr
                     width: parent.width
-                    hoverEnabled: true
-                    text: qsTr("Frame pacing")
-                    font.pointSize:  12
-                    enabled: StreamingPreferences.enableVsync
-                    checked: StreamingPreferences.enableVsync && StreamingPreferences.framePacing
+                    text: qsTr("Enable HDR")
+                    font.pointSize: 12
+
+                    enabled: SystemProperties.supportsHdr
+                    checked: enabled && StreamingPreferences.enableHdr
                     onCheckedChanged: {
-                        StreamingPreferences.framePacing = checked
+                        StreamingPreferences.enableHdr = checked
                     }
+
+                    // Updating StreamingPreferences.videoCodecConfig is handled above
+
                     ToolTip.delay: 1000
                     ToolTip.timeout: 5000
                     ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Frame pacing reduces micro-stutter by delaying frames that come in too early")
+                    ToolTip.text: enabled ?
+                                      qsTr("The stream will be HDR-capable, but some games may require an HDR monitor on your host PC to enable HDR mode.")
+                                    :
+                                      qsTr("HDR streaming is not supported on this PC.")
                 }
             }
         }
@@ -1072,10 +1123,10 @@ Flickable {
                             text: "Português" // Portuguese
                             val: StreamingPreferences.LANG_PT
                         }
-                        /* ListElement {
+                        ListElement {
                             text: "Português do Brasil" // Brazilian Portuguese
                             val: StreamingPreferences.LANG_PT_BR
-                        } */
+                        }
                         ListElement {
                             text: "Ελληνικά" // Greek
                             val: StreamingPreferences.LANG_EL
@@ -1112,6 +1163,18 @@ Flickable {
                             text: "Eesti" // Estonian
                             val: StreamingPreferences.LANG_ET
                         } */
+                        ListElement {
+                            text: "Български" // Bulgarian
+                            val: StreamingPreferences.LANG_BG
+                        }
+                        /* ListElement {
+                            text: "Esperanto"
+                            val: StreamingPreferences.LANG_EO
+                        } */
+                        ListElement {
+                            text: "தமிழ்" // Tamil
+                            val: StreamingPreferences.LANG_TA
+                        }
                     }
                     // ::onActivated must be used, as it only listens for when the index is changed by a human
                     onActivated : {
@@ -1196,6 +1259,17 @@ Flickable {
                     checked: StreamingPreferences.connectionWarnings
                     onCheckedChanged: {
                         StreamingPreferences.connectionWarnings = checked
+                    }
+                }
+
+                CheckBox {
+                    id: configurationWarningsCheck
+                    width: parent.width
+                    text: qsTr("Show configuration warnings")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.configurationWarnings
+                    onCheckedChanged: {
+                        StreamingPreferences.configurationWarnings = checked
                     }
                 }
 
@@ -1570,7 +1644,7 @@ Flickable {
                             val: StreamingPreferences.VCC_FORCE_HEVC
                         }
                         ListElement {
-                            text: qsTr("AV1 (Experimental)")
+                            text: qsTr("AV1")
                             val: StreamingPreferences.VCC_FORCE_AV1
                         }
                     }
@@ -1582,33 +1656,66 @@ Flickable {
                     }
                 }
 
-                CheckBox {
-                    id: enableHdr
+                Label {
                     width: parent.width
-                    text: qsTr("Enable HDR (Experimental)")
+                    id: rendererTitle
+                    text: qsTr("Renderer")
                     font.pointSize: 12
+                    wrapMode: Text.Wrap
+                    visible: SystemProperties.isDarwin
+                }
 
-                    enabled: SystemProperties.supportsHdr
-                    checked: enabled && StreamingPreferences.enableHdr
-                    onCheckedChanged: {
-                        StreamingPreferences.enableHdr = checked
+                AutoResizingComboBox {
+                    // ignore setting the index at first, and actually set it when the component is loaded
+                    Component.onCompleted: {
+                        var saved_rs = StreamingPreferences.rendererSelection
+
+                        // Default to Automatic
+                        currentIndex = 0
+
+                        for(var i = 0; i < rendererListModel.count; i++) {
+                            var el_rs = rendererListModel.get(i).val;
+                            if (saved_rs === el_rs) {
+                                currentIndex = i
+                                break
+                            }
+                        }
+
+                        activated(currentIndex)
                     }
 
-                    // Updating StreamingPreferences.videoCodecConfig is handled above
-
-                    ToolTip.delay: 1000
-                    ToolTip.timeout: 5000
-                    ToolTip.visible: hovered
-                    ToolTip.text: enabled ?
-                                      qsTr("The stream will be HDR-capable, but some games may require an HDR monitor on your host PC to enable HDR mode.")
-                                    :
-                                      qsTr("HDR streaming is not supported on this PC.")
+                    id: rendererComboBox
+                    visible: SystemProperties.isDarwin
+                    textRole: "text"
+                    model: ListModel {
+                        id: rendererListModel
+                        ListElement {
+                            text: qsTr("Automatic (Recommended)")
+                            val: StreamingPreferences.RS_AUTO
+                        }
+                        ListElement {
+                            text: "Vulkan"
+                            val: StreamingPreferences.RS_VULKAN
+                        }
+                        ListElement {
+                            text: "Metal"
+                            val: StreamingPreferences.RS_METAL
+                        }
+                        ListElement {
+                            text: "AVSampleBufferDisplayLayer"
+                            val: StreamingPreferences.RS_AVSBDL
+                        }
+                    }
+                    // ::onActivated must be used, as it only listens for when the index is changed by a human
+                    onActivated : {
+                        StreamingPreferences.rendererSelection = rendererListModel.get(currentIndex).val
+                    }
                 }
 
                 CheckBox {
                     id: enableYUV444
                     width: parent.width
-                    text: qsTr("Enable YUV 4:4:4 (Experimental)")
+                    text: qsTr("Enable YUV 4:4:4")
                     font.pointSize: 12
 
                     checked: StreamingPreferences.enableYUV444
@@ -1616,11 +1723,13 @@ Flickable {
                         // This is called on init, so only reset to default bitrate when checked state changes.
                         if (StreamingPreferences.enableYUV444 != checked) {
                             StreamingPreferences.enableYUV444 = checked
-                            StreamingPreferences.bitrateKbps = StreamingPreferences.getDefaultBitrate(StreamingPreferences.width,
-                                                                                                      StreamingPreferences.height,
-                                                                                                      StreamingPreferences.fps,
-                                                                                                      StreamingPreferences.enableYUV444);
-                            slider.value = StreamingPreferences.bitrateKbps
+                            if (StreamingPreferences.autoAdjustBitrate) {
+                                StreamingPreferences.bitrateKbps = StreamingPreferences.getDefaultBitrate(StreamingPreferences.width,
+                                                                                                          StreamingPreferences.height,
+                                                                                                          StreamingPreferences.fps,
+                                                                                                          StreamingPreferences.enableYUV444);
+                                slider.value = StreamingPreferences.bitrateKbps
+                            }
                         }
                     }
 

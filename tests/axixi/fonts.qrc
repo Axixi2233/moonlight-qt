@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/data">
+        <file alias="OPPOSans-H.ttf">../../app/OPPOSans-H.ttf</file>
+    </qresource>
+</RCC>

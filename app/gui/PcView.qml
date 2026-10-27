@@ -35,7 +35,7 @@ CenteredGridView {
         ComputerManager.computerAddCompleted.connect(addComplete)
 
         // Highlight the first item if a gamepad is connected
-        if (currentIndex == -1 && SdlGamepadKeyNavigation.getConnectedGamepads() > 0) {
+        if (currentIndex === -1 && SdlGamepadKeyNavigation.getConnectedGamepads() > 0) {
             currentIndex = 0
         }
     }
@@ -90,6 +90,7 @@ CenteredGridView {
         BusyIndicator {
             id: searchSpinner
             visible: StreamingPreferences.enableMdns
+            running: visible
         }
 
         Label {
@@ -143,6 +144,7 @@ CenteredGridView {
             width: 75
             height: 75
             visible: model.statusUnknown
+            running: visible
         }
 
         Label {
@@ -163,13 +165,13 @@ CenteredGridView {
             asynchronous: true
             sourceComponent: NavigableMenu {
                 id: pcContextMenu
+                initiator: pcContextMenuLoader.parent
                 MenuItem {
                     text: qsTr("PC Status: %1").arg(model.online ? qsTr("Online") : qsTr("Offline"))
                     font.bold: true
                     enabled: false
                 }
                 NavigableMenuItem {
-                    parentMenu: pcContextMenu
                     text: qsTr("View All Apps")
                     onTriggered: {
                         var component = Qt.createComponent("AppView.qml")
@@ -179,13 +181,11 @@ CenteredGridView {
                     visible: model.online && model.paired
                 }
                 NavigableMenuItem {
-                    parentMenu: pcContextMenu
                     text: qsTr("Wake PC")
                     onTriggered: computerModel.wakeComputer(index)
                     visible: !model.online && model.wakeable
                 }
                 NavigableMenuItem {
-                    parentMenu: pcContextMenu
                     text: qsTr("Test Network")
                     onTriggered: {
                         computerModel.testConnectionForComputer(index)
@@ -194,7 +194,6 @@ CenteredGridView {
                 }
 
                 NavigableMenuItem {
-                    parentMenu: pcContextMenu
                     text: qsTr("Rename PC")
                     onTriggered: {
                         renamePcDialog.pcIndex = index
@@ -203,7 +202,6 @@ CenteredGridView {
                     }
                 }
                 NavigableMenuItem {
-                    parentMenu: pcContextMenu
                     text: qsTr("Delete PC")
                     onTriggered: {
                         deletePcDialog.pcIndex = index
@@ -212,7 +210,6 @@ CenteredGridView {
                     }
                 }
                 NavigableMenuItem {
-                    parentMenu: pcContextMenu
                     text: qsTr("View Details")
                     onTriggered: {
                         showPcDetailsDialog.pcDetails = model.details
@@ -293,10 +290,6 @@ CenteredGridView {
 
     NavigableMessageDialog {
         id: pairDialog
-
-        // Pairing dialog must be modal to prevent double-clicks from triggering
-        // pairing twice
-        modal: true
         closePolicy: Popup.CloseOnEscape
 
         // don't allow edits to the rest of the window while open

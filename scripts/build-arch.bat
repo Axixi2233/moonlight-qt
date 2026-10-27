@@ -25,6 +25,17 @@ if /I "%BUILD_CONFIG%"=="debug" (
                 echo Signed release builds must not have unstaged changes!
                 exit /b 1
             )
+
+            if not defined SIGNTOOL_PARAMS (
+                echo A signtool parameter string must be specified in SIGNTOOL_PARAMS for signed release builds
+                exit /b 1
+            )
+
+            echo Updating dependencies
+            powershell %cd%\setup-deps.ps1
+            if !ERRORLEVEL! NEQ 0 (
+                exit /b 1
+            )
         ) else (
             echo Invalid build configuration - expected 'debug' or 'release'
             echo Usage: scripts\build-arch.bat ^(release^|debug^)
@@ -33,18 +44,23 @@ if /I "%BUILD_CONFIG%"=="debug" (
     )
 )
 
-rem Locate qmake and determine if we're using qmake.exe or qmake.bat
-rem qmake.bat is an ARM64 forwarder to the x64 version of qmake.exe
-where qmake.bat
+rem Locate qmake and determine if we're using qmake.exe or (host-)qmake.bat
+rem (host-)qmake.bat is an ARM64 forwarder to the x64 version of qmake.exe
+where /q qmake.bat
 if !ERRORLEVEL! EQU 0 (
     set QMAKE_CMD=call qmake.bat
 ) else (
-    where qmake.exe
+    where /q host-qmake.bat
     if !ERRORLEVEL! EQU 0 (
-        set QMAKE_CMD=qmake.exe
+        set QMAKE_CMD=call host-qmake.bat
     ) else (
-        echo Unable to find QMake. Did you add Qt bins to your PATH?
-        goto Error
+        where /q qmake.exe
+        if !ERRORLEVEL! EQU 0 (
+            set QMAKE_CMD=qmake.exe
+        ) else (
+            echo Unable to find QMake. Did you add Qt bins to your PATH?
+            goto Error
+        )
     )
 )
 
@@ -64,12 +80,17 @@ if not x%QT_PATH:_arm64=%==x%QT_PATH% (
     set HOSTBIN_PATH=%QT_PATH:_arm64=_64%
     echo HOSTBIN_PATH=!HOSTBIN_PATH!
 
-    if exist %QT_PATH%\windeployqt.exe (
-        echo Using windeployqt.exe from QT_PATH
-        set WINDEPLOYQT_CMD=windeployqt.exe
-    ) else (
+    if exist %QT_PATH%\host-qtpaths.bat (
         echo Using windeployqt.exe from HOSTBIN_PATH
-        set WINDEPLOYQT_CMD=!HOSTBIN_PATH!\windeployqt.exe --qtpaths %QT_PATH%\qtpaths.bat
+        set WINDEPLOYQT_CMD=!HOSTBIN_PATH!\windeployqt.exe --qtpaths %QT_PATH%\host-qtpaths.bat
+    ) else (
+        if exist %QT_PATH%\windeployqt.exe (
+            echo Using windeployqt.exe from QT_PATH
+            set WINDEPLOYQT_CMD=windeployqt.exe
+        ) else (
+            echo Using windeployqt.exe from HOSTBIN_PATH
+            set WINDEPLOYQT_CMD=!HOSTBIN_PATH!\windeployqt.exe --qtpaths %QT_PATH%\qtpaths.bat
+        )
     )
 ) else (
     if not x%QT_PATH:_64=%==x%QT_PATH% (
@@ -88,15 +109,19 @@ if not x%QT_PATH:_arm64=%==x%QT_PATH% (
 
 echo Detected target architecture: %ARCH%
 
-set SIGNTOOL_PARAMS=sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /sha1 8b9d0d682ad9459e54f05a79694bc10f9876e297 /v
-
 set BUILD_ROOT=%cd%\build
 set SOURCE_ROOT=%cd%
 set BUILD_FOLDER=%BUILD_ROOT%\build-%ARCH%-%BUILD_CONFIG%
 set DEPLOY_FOLDER=%BUILD_ROOT%\deploy-%ARCH%-%BUILD_CONFIG%
 set INSTALLER_FOLDER=%BUILD_ROOT%\installer-%ARCH%-%BUILD_CONFIG%
 set SYMBOLS_FOLDER=%BUILD_ROOT%\symbols-%ARCH%-%BUILD_CONFIG%
-set /p VERSION=<%SOURCE_ROOT%\app\version.txt
+
+rem Allow CI to override the version.txt with an environment variable
+if defined CI_VERSION (
+    set VERSION=%CI_VERSION%
+) else (
+    set /p VERSION=<%SOURCE_ROOT%\app\version.txt
+)
 
 rem Use the correct VC tools for the specified architecture
 if /I "%ARCH%" EQU "x64" (
@@ -112,7 +137,8 @@ if /I "%VC_ARCH%" NEQ "%PROCESSOR_ARCHITECTURE%" (
 )
 
 rem Find Visual Studio and run vcvarsall.bat
-set VSWHERE="%SOURCE_ROOT%\scripts\vswhere.exe"
+call "%SOURCE_ROOT%\scripts\find-vswhere.bat"
+if !ERRORLEVEL! NEQ 0 goto Error
 for /f "usebackq delims=" %%i in (`%VSWHERE% -latest -property installationPath`) do (
     call "%%i\VC\Auxiliary\Build\vcvarsall.bat" %VC_ARCH%
 )
@@ -120,6 +146,7 @@ if !ERRORLEVEL! NEQ 0 goto Error
 
 rem Find VC redistributable DLLs
 for /f "usebackq delims=" %%i in (`%VSWHERE% -latest -find VC\Redist\MSVC\*\%ARCH%\Microsoft.VC*.CRT`) do set VC_REDIST_DLL_PATH=%%i
+if !ERRORLEVEL! NEQ 0 goto Error
 
 echo Cleaning output directories
 rmdir /s /q %DEPLOY_FOLDER%
@@ -132,15 +159,41 @@ mkdir %BUILD_FOLDER%
 mkdir %INSTALLER_FOLDER%
 mkdir %SYMBOLS_FOLDER%
 
+rem Enable LTCG for official builds
+set CFLAGS=/GL
+set CXXFLAGS=/GL
+set LDFLAGS=/LTCG
+
 echo Configuring the project
 pushd %BUILD_FOLDER%
 %QMAKE_CMD% %SOURCE_ROOT%\moonlight-qt.pro
 if !ERRORLEVEL! NEQ 0 goto Error
 popd
 
+rem Locate jom.exe or fall back to nmake.exe
+where /q jom.exe
+if !ERRORLEVEL! EQU 0 (
+    set JOM_CMD=jom.exe
+) else if exist "%QT_PATH%\..\..\..\Tools\QtCreator\bin\jom\jom.exe" (
+    set JOM_CMD="%QT_PATH%\..\..\..\Tools\QtCreator\bin\jom\jom.exe"
+) else if exist "%QT_PATH%\..\..\..\Tools\QtCreator\bin\jom.exe" (
+    set JOM_CMD="%QT_PATH%\..\..\..\Tools\QtCreator\bin\jom.exe"
+) else if exist "%QT_PATH%\..\..\..\Tools\jom\jom.exe" (
+    set JOM_CMD="%QT_PATH%\..\..\..\Tools\jom\jom.exe"
+) else (
+    where /q nmake.exe
+    if !ERRORLEVEL! EQU 0 (
+        echo jom.exe not found. Falling back to nmake.exe.
+        set JOM_CMD=nmake.exe
+    ) else (
+        echo Unable to find jom.exe or nmake.exe!
+        goto Error
+    )
+)
+
 echo Compiling Moonlight in %BUILD_CONFIG% configuration
 pushd %BUILD_FOLDER%
-%SOURCE_ROOT%\scripts\jom.exe %BUILD_CONFIG%
+!JOM_CMD! %BUILD_CONFIG%
 if !ERRORLEVEL! NEQ 0 goto Error
 popd
 
@@ -196,27 +249,30 @@ if not x%QT_PATH:\5.=%==x%QT_PATH% (
     rem Qt 5.15
     set WINDEPLOYQT_ARGS=--no-qmltooling --no-virtualkeyboard
 ) else (
-    rem Qt 6.5+
+    rem Qt 6.8+
     set WINDEPLOYQT_ARGS=--no-system-d3d-compiler --no-system-dxc-compiler --skip-plugin-types qmltooling,generic --no-ffmpeg
     set WINDEPLOYQT_ARGS=!WINDEPLOYQT_ARGS! --no-quickcontrols2fusion --no-quickcontrols2imagine --no-quickcontrols2universal
-    set WINDEPLOYQT_ARGS=!WINDEPLOYQT_ARGS! --no-quickcontrols2fusionstyleimpl --no-quickcontrols2imaginestyleimpl --no-quickcontrols2universalstyleimpl --no-quickcontrols2windowsstyleimpl
+    set WINDEPLOYQT_ARGS=!WINDEPLOYQT_ARGS! --no-quickcontrols2fusionstyleimpl --no-quickcontrols2imaginestyleimpl --no-quickcontrols2universalstyleimpl --no-quickcontrols2windowsstyleimpl --no-quickcontrols2fluentwinui3styleimpl
 )
 
 echo Deploying Qt dependencies
 %WINDEPLOYQT_CMD% --dir %DEPLOY_FOLDER% --%BUILD_CONFIG% --qmldir %SOURCE_ROOT%\app\gui --no-opengl-sw --no-compiler-runtime --no-sql %WINDEPLOYQT_ARGS% %BUILD_FOLDER%\app\%BUILD_CONFIG%\Moonlight.exe
 if !ERRORLEVEL! NEQ 0 goto Error
 
-echo Deleting unused styles
+echo Deleting unused files
 rem Qt 5.x directories
 rmdir /s /q %DEPLOY_FOLDER%\QtQuick\Controls.2\Fusion
 rmdir /s /q %DEPLOY_FOLDER%\QtQuick\Controls.2\Imagine
 rmdir /s /q %DEPLOY_FOLDER%\QtQuick\Controls.2\Universal
-rem Qt 6.5+ directories
+rem Qt 6.8+ directories
 rmdir /s /q %DEPLOY_FOLDER%\qml\QtQuick\Controls\Fusion
 rmdir /s /q %DEPLOY_FOLDER%\qml\QtQuick\Controls\Imagine
 rmdir /s /q %DEPLOY_FOLDER%\qml\QtQuick\Controls\Universal
 rmdir /s /q %DEPLOY_FOLDER%\qml\QtQuick\Controls\Windows
+rmdir /s /q %DEPLOY_FOLDER%\qml\QtQuick\Controls\FluentWinUI3
 rmdir /s /q %DEPLOY_FOLDER%\qml\QtQuick\NativeStyle
+rem icuuc.dll ships with all supported OSes (and Qt incorrectly deploys the x64 version on ARM64)
+del %DEPLOY_FOLDER%\icuuc.dll
 
 if "%SIGN%"=="1" (
     echo Signing deployed binaries
@@ -224,7 +280,7 @@ if "%SIGN%"=="1" (
     for /r "%DEPLOY_FOLDER%" %%f in (*.dll *.exe) do (
         set FILES_TO_SIGN=!FILES_TO_SIGN! %%f
     )
-    signtool %SIGNTOOL_PARAMS% !FILES_TO_SIGN!
+    signtool sign %SIGNTOOL_PARAMS% !FILES_TO_SIGN!
     if !ERRORLEVEL! NEQ 0 goto Error
 )
 
@@ -237,7 +293,7 @@ if "%ML_SYMBOL_STORE%" NEQ "" (
 )
 
 echo Building MSI
-msbuild -Restore %SOURCE_ROOT%\wix\Moonlight\Moonlight.wixproj /p:Configuration=%BUILD_CONFIG% /p:Platform=%ARCH% /p:MSBuildProjectExtensionsPath=%BUILD_FOLDER%\
+cmd /c "set VERSION= && msbuild -Restore %SOURCE_ROOT%\wix\Moonlight\Moonlight.wixproj /p:Configuration=%BUILD_CONFIG% /p:Platform=%ARCH% /p:MSBuildProjectExtensionsPath=%BUILD_FOLDER%\"
 if !ERRORLEVEL! NEQ 0 goto Error
 
 echo Copying application binary to deployment directory
@@ -249,9 +305,19 @@ rem This must be done after WiX harvesting and signing, since the VCRT dlls are 
 rem and should not be harvested for inclusion in the full installer
 copy "%VC_REDIST_DLL_PATH%\*.dll" %DEPLOY_FOLDER%
 if !ERRORLEVEL! NEQ 0 goto Error
-rem This file tells Moonlight that it's a portable installation
-echo. > %DEPLOY_FOLDER%\portable.dat
-if !ERRORLEVEL! NEQ 0 goto Error
+
+rem Since we don't publish Windows installers for CI builds, let's use the user profile
+rem location of the regular non-portable version by default. We'll place a file in the
+rem the package to allow the user to rename if they want portable behavior.
+if defined CI_VERSION (
+    echo. > %DEPLOY_FOLDER%\portable.dat.inactive
+    if !ERRORLEVEL! NEQ 0 goto Error
+) else (
+    rem This file tells Moonlight that it's a portable installation
+    echo. > %DEPLOY_FOLDER%\portable.dat
+    if !ERRORLEVEL! NEQ 0 goto Error
+)
+
 7z a %INSTALLER_FOLDER%\MoonlightPortable-%ARCH%-%VERSION%.zip %DEPLOY_FOLDER%\*
 if !ERRORLEVEL! NEQ 0 goto Error
 

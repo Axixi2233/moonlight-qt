@@ -33,19 +33,19 @@ class GfeHttpResponseException : public std::exception
 public:
     GfeHttpResponseException(int statusCode, QString message) :
         m_StatusCode(statusCode),
-        m_StatusMessage(message)
+        m_StatusMessage(message.toUtf8())
     {
 
     }
 
     const char* what() const throw()
     {
-        return m_StatusMessage.toLatin1();
+        return m_StatusMessage.constData();
     }
 
     const char* getStatusMessage() const
     {
-        return m_StatusMessage.toLatin1();
+        return m_StatusMessage.constData();
     }
 
     int getStatusCode() const
@@ -55,12 +55,12 @@ public:
 
     QString toQString() const
     {
-        return m_StatusMessage + " (Error " + QString::number(m_StatusCode) + ")";
+        return QString::fromUtf8(m_StatusMessage) + " (Error " + QString::number(m_StatusCode) + ")";
     }
 
 private:
     int m_StatusCode;
-    QString m_StatusMessage;
+    QByteArray m_StatusMessage;
 };
 
 class QtNetworkReplyException : public std::exception
@@ -68,19 +68,19 @@ class QtNetworkReplyException : public std::exception
 public:
     QtNetworkReplyException(QNetworkReply::NetworkError error, QString errorText) :
         m_Error(error),
-        m_ErrorText(errorText)
+        m_ErrorText(errorText.toUtf8())
     {
 
     }
 
     const char* what() const throw()
     {
-        return m_ErrorText.toLatin1();
+        return m_ErrorText.constData();
     }
 
     const char* getErrorText() const
     {
-        return m_ErrorText.toLatin1();
+        return m_ErrorText.constData();
     }
 
     QNetworkReply::NetworkError getError() const
@@ -90,12 +90,12 @@ public:
 
     QString toQString() const
     {
-        return m_ErrorText + " (Error " + QString::number(m_Error) + ")";
+        return QString::fromUtf8(m_ErrorText) + " (Error " + QString::number(m_Error) + ")";
     }
 
 private:
     QNetworkReply::NetworkError m_Error;
-    QString m_ErrorText;
+    QByteArray m_ErrorText;
 };
 
 class NvHTTP : public QObject
@@ -109,9 +109,9 @@ public:
         NVLL_VERBOSE
     };
 
-    explicit NvHTTP(NvAddress address, uint16_t httpsPort, QSslCertificate serverCert);
+    explicit NvHTTP(NvAddress address, uint16_t httpsPort, QSslCertificate serverCert, bool useTrueUid, QNetworkAccessManager* nam = nullptr);
 
-    explicit NvHTTP(NvComputer* computer);
+    explicit NvHTTP(NvComputer* computer, QNetworkAccessManager* nam = nullptr);
 
     static
     int
@@ -142,9 +142,9 @@ public:
                            NvLogLevel logLevel = NvLogLevel::NVLL_VERBOSE);
 
     void setServerCert(QSslCertificate serverCert);
-
     void setAddress(NvAddress address);
     void setHttpsPort(uint16_t port);
+    void setTrueUid(bool useTrueUid);
 
     NvAddress address();
 
@@ -196,6 +196,7 @@ private:
                    NvLogLevel logLevel);
 
     NvAddress m_Address;
-    QNetworkAccessManager m_Nam;
+    QNetworkAccessManager* m_Nam;
     QSslCertificate m_ServerCert;
+    bool m_UseTrueUid;
 };

@@ -1,4 +1,4 @@
-<Project Sdk="WixToolset.Sdk/5.0.1">
+<Project Sdk="WixToolset.Sdk/7.0.0">
   <PropertyGroup>
     <OutputType>Bundle</OutputType>
   </PropertyGroup>
@@ -9,17 +9,20 @@
     <OutputPath>$(INSTALLER_FOLDER)\</OutputPath>
     <IntermediateOutputPath>$(BUILD_FOLDER)\</IntermediateOutputPath>
   </PropertyGroup>
+  <PropertyGroup>
+    <AcceptEula>wix7</AcceptEula>
+  </PropertyGroup>
   <PropertyGroup Condition="$(SIGN)!=''">
     <SignOutput>true</SignOutput>
   </PropertyGroup>
   <Target Name="SignBundleEngine">
-    <Exec Command='signtool.exe $(SIGNTOOL_PARAMS) %(SignBundleEngine.FullPath)' />
+    <Exec Command='signtool.exe sign $(SIGNTOOL_PARAMS) %(SignBundleEngine.FullPath)' />
   </Target>
   <Target Name="SignBundle">
-    <Exec Command='signtool.exe $(SIGNTOOL_PARAMS) %(SignBundle.FullPath)' />
+    <Exec Command='signtool.exe sign $(SIGNTOOL_PARAMS) %(SignBundle.FullPath)' />
   </Target>
   <ItemGroup>
-    <PackageReference Include="WixToolset.Bal.wixext" Version="5.0.1" />
-    <PackageReference Include="WixToolset.Util.wixext" Version="5.0.1" />
+    <PackageReference Include="WixToolset.Bal.wixext" Version="7.0.0" />
+    <PackageReference Include="WixToolset.Util.wixext" Version="7.0.0" />
   </ItemGroup>
 </Project>

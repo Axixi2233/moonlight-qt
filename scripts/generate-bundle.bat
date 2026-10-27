@@ -25,6 +25,11 @@ if /I "%BUILD_CONFIG%"=="debug" (
                 echo Signed release builds must not have unstaged changes!
                 exit /b 1
             )
+
+            if not defined SIGNTOOL_PARAMS (
+                echo A signtool parameter string must be specified in SIGNTOOL_PARAMS for signed release builds
+                exit /b 1
+            )
         ) else (
             echo Invalid build configuration - expected 'debug' or 'release'
             exit /b 1
@@ -32,25 +37,24 @@ if /I "%BUILD_CONFIG%"=="debug" (
     )
 )
 
-set SIGNTOOL_PARAMS=sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /sha1 8b9d0d682ad9459e54f05a79694bc10f9876e297 /v
-
 set BUILD_ROOT=%cd%\build
 set SOURCE_ROOT=%cd%
 set BUILD_FOLDER=%BUILD_ROOT%\build-%BUILD_CONFIG%
 set INSTALLER_FOLDER=%BUILD_ROOT%\installer-%BUILD_CONFIG%
-set /p VERSION=<%SOURCE_ROOT%\app\version.txt
 
-rem Ensure that all architectures have been built before the final bundle
+rem Allow CI to override the version.txt with an environment variable
+if defined CI_VERSION (
+    set VERSION=%CI_VERSION%
+) else (
+    set /p VERSION=<%SOURCE_ROOT%\app\version.txt
+)
+
+rem Axixi distributes an x64-only Windows bundle.
 if not exist "%BUILD_ROOT%\build-x64-%BUILD_CONFIG%\Moonlight.msi" (
     echo Unable to build bundle - missing binaries for %BUILD_CONFIG% x64
     echo You must run 'build-arch.bat %BUILD_CONFIG% x64' first
     exit /b 1
 )
-@REM if not exist "%BUILD_ROOT%\build-arm64-%BUILD_CONFIG%\Moonlight.msi" (
-@REM     echo Unable to build bundle - missing binaries for %BUILD_CONFIG% arm64
-@REM     echo You must run 'build-arch.bat %BUILD_CONFIG% arm64' first
-@REM     exit /b 1
-@REM )
 
 echo Cleaning output directories
 rmdir /s /q %BUILD_FOLDER%
@@ -59,7 +63,8 @@ mkdir %BUILD_FOLDER%
 mkdir %INSTALLER_FOLDER%
 
 rem Find Visual Studio and run vcvarsall.bat
-set VSWHERE="%SOURCE_ROOT%\scripts\vswhere.exe"
+call "%SOURCE_ROOT%\scripts\find-vswhere.bat"
+if !ERRORLEVEL! NEQ 0 goto Error
 for /f "usebackq delims=" %%i in (`%VSWHERE% -latest -property installationPath`) do (
     call "%%i\VC\Auxiliary\Build\vcvarsall.bat" x86
 )
@@ -67,7 +72,7 @@ if !ERRORLEVEL! NEQ 0 goto Error
 
 echo Building bundle
 rem Bundles are always x86 binaries
-msbuild -Restore %SOURCE_ROOT%\wix\MoonlightSetup\MoonlightSetup.wixproj /p:Configuration=%BUILD_CONFIG% /p:Platform=x86 /p:MSBuildProjectExtensionsPath=%BUILD_FOLDER%\
+cmd /c "set VERSION= && msbuild -Restore %SOURCE_ROOT%\wix\MoonlightSetup\MoonlightSetup.wixproj /p:Configuration=%BUILD_CONFIG% /p:Platform=x86 /p:MSBuildProjectExtensionsPath=%BUILD_FOLDER%\"
 if !ERRORLEVEL! NEQ 0 goto Error
 
 rem Rename the installer to match the publishing convention

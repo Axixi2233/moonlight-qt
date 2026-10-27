@@ -2,6 +2,8 @@
 
 
 **/.vs/
+.vscode/
 build/
+libs/
 config.tests/*/.qmake.stash
 config.tests/*/Makefile

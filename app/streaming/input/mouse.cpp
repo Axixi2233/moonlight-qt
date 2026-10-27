@@ -4,6 +4,28 @@
 #include "SDL_compat.h"
 #include "streaming/streamutils.h"
 
+void SdlInputHandler::notifyMouseLeave()
+{
+    if (m_NeedsManualCaptureOnLeave) {
+        // SDL on Windows doesn't send the mouse button up until the mouse re-enters the window
+        // after leaving it. This breaks some of the Aero snap gestures, so we'll capture it to
+        // allow us to receive the mouse button up events later.
+        //
+        // On macOS and X11, capturing the mouse allows us to receive mouse motion outside the
+        // window (button up already worked without capture).
+        if (m_AbsoluteMouseMode && isCaptureActive()) {
+            // NB: Not using SDL_GetGlobalMouseState() because we want our state not the system's
+            Uint32 mouseState = SDL_GetMouseState(nullptr, nullptr);
+            for (Uint32 button = SDL_BUTTON_LEFT; button <= SDL_BUTTON_X2; button++) {
+                if (mouseState & SDL_BUTTON(button)) {
+                    SDL_CaptureMouse(SDL_TRUE);
+                    break;
+                }
+            }
+        }
+    }
+}
+
 void SdlInputHandler::handleMouseButtonEvent(SDL_MouseButtonEvent* event)
 {
     int button;
@@ -128,8 +150,10 @@ void SdlInputHandler::handleMouseMotionEvent(SDL_MouseMotionEvent* event)
         Uint32 buttonState = SDL_GetMouseState(nullptr, nullptr);
         if (buttonState == 0) {
             if (m_PendingMouseButtonsAllUpOnVideoRegionLeave) {
-                // Stop capturing the mouse now
-                SDL_CaptureMouse(SDL_FALSE);
+                if (m_NeedsManualCaptureOnLeave) {
+                    // Stop capturing the mouse now
+                    SDL_CaptureMouse(SDL_FALSE);
+                }
                 m_PendingMouseButtonsAllUpOnVideoRegionLeave = false;
             }
         }
@@ -193,7 +217,7 @@ void SdlInputHandler::handleMouseWheelEvent(SDL_MouseWheelEvent* event)
     if (event->preciseX != 0.0f) {
         // Invert the scroll direction if needed
         if (m_ReverseScrollDirection) {
-            event->preciseX = -event->preciseY;
+            event->preciseX = -event->preciseX;
         }
 
 #ifdef Q_OS_DARWIN
@@ -269,8 +293,10 @@ void SdlInputHandler::updatePointerRegionLock()
     // toggled it themselves using the keyboard shortcut. If that's the case, they
     // have full control over it and we don't touch it anymore.
     if (!m_PointerRegionLockToggledByUser) {
-        // Lock the pointer in true full-screen mode and leave it unlocked in other modes
-        m_PointerRegionLockActive = (SDL_GetWindowFlags(m_Window) & SDL_WINDOW_FULLSCREEN_DESKTOP) == SDL_WINDOW_FULLSCREEN;
+        // Lock the pointer in true full-screen mode or in any fullscreen mode when only a single monitor is present
+        Uint32 fullscreenFlags = SDL_GetWindowFlags(m_Window) & SDL_WINDOW_FULLSCREEN_DESKTOP;
+        m_PointerRegionLockActive = (fullscreenFlags == SDL_WINDOW_FULLSCREEN) ||
+                                    (fullscreenFlags != 0 && SDL_GetNumVideoDisplays() == 1);
     }
 
     // If region lock is enabled, grab the cursor so it can't accidentally leave our window.

@@ -59,13 +59,6 @@ public:
 
     void showMessage(QString message, MessageType type) const
     {
-    #if defined(Q_OS_WIN32)
-        UINT flags = MB_OK | MB_TOPMOST | MB_SETFOREGROUND;
-        flags |= (type == Info ? MB_ICONINFORMATION : MB_ICONERROR);
-        QString title = "Moonlight";
-        MessageBoxW(nullptr, reinterpret_cast<const wchar_t *>(message.utf16()),
-                    reinterpret_cast<const wchar_t *>(title.utf16()), flags);
-    #endif
         message = message.endsWith('\n') ? message : message + '\n';
         fputs(qPrintable(message), type == Info ? stdout : stderr);
     }
@@ -113,7 +106,7 @@ public:
 
     QPair<int,int> getResolutionOptionValue(QString name) const
     {
-        QRegularExpression re("^(\\d+)x(\\d+)$", QRegularExpression::CaseInsensitiveOption);
+        static QRegularExpression re("^(\\d+)x(\\d+)$", QRegularExpression::CaseInsensitiveOption);
         auto match = re.match(value(name));
         if (!match.hasMatch()) {
             showError(QString("Invalid %1 format: %2").arg(name, value(name)));
@@ -202,7 +195,7 @@ GlobalCommandLineParser::ParseResult GlobalCommandLineParser::parse(const QStrin
             }
         }
 
-        parser.showError(QString("Invalid action"));
+        parser.showError("Invalid action");
     }
 }
 
@@ -387,7 +380,7 @@ void StreamCommandLineParser::parse(const QStringList &args, StreamingPreference
     parser.handleUnknownOptions();
 
     // Resolve display's width and height
-    QRegularExpression resolutionRexExp("^(720|1080|1440|4K|resolution)$");
+    static QRegularExpression resolutionRexExp("^(720|1080|1440|4K|resolution)$");
     QStringList resoOptions = parser.optionNames().filter(resolutionRexExp);
     bool displaySet = !resoOptions.isEmpty();
     if (displaySet) {
@@ -493,7 +486,7 @@ void StreamCommandLineParser::parse(const QStringList &args, StreamingPreference
     // Resolve --performance-overlay and --no-performance-overlay options
     preferences->showPerformanceOverlay = parser.getToggleOptionValue("performance-overlay", preferences->showPerformanceOverlay);
 
-    // Resolve --performance-overlay and --no-performance-overlay options
+    // Resolve --performance-overlay-lite and --no-performance-overlay-lite options
     preferences->showPerformanceOverlayLite = parser.getToggleOptionValue("performance-overlay-lite", preferences->showPerformanceOverlayLite);
 
     // Resolve --hdr and --no-hdr options

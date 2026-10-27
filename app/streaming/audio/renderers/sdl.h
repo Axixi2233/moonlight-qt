@@ -16,12 +16,11 @@ public:
 
     virtual bool submitAudio(int bytesWritten);
 
-    virtual int getCapabilities();
-
     virtual AudioFormat getAudioBufferFormat();
 
 private:
     SDL_AudioDeviceID m_AudioDevice;
     void* m_AudioBuffer;
-    int m_FrameSize;
+    Uint32 m_FrameSize;
+    Uint32 m_FrameDurationMs;
 };

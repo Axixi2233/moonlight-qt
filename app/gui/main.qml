@@ -51,10 +51,20 @@ ApplicationWindow {
         }
 
         // Display any modal dialogs for configuration warnings
-        if (SystemProperties.isWow64) {
-            wow64Dialog.open()
+        if (runConfigChecks) {
+            if (SystemProperties.isWow64) {
+                wow64Dialog.open()
+            }
+
+            // Hardware acceleration and unmapped gamepads are checked asynchronously
+            SystemProperties.hasHardwareAccelerationChanged.connect(hasHardwareAccelerationChanged)
+            SystemProperties.unmappedGamepadsChanged.connect(hasUnmappedGamepadsChanged)
+            SystemProperties.startAsyncLoad()
         }
-        else if (!SystemProperties.hasHardwareAcceleration) {
+    }
+
+    function hasHardwareAccelerationChanged() {
+        if (!SystemProperties.hasHardwareAcceleration && StreamingPreferences.videoDecoderSelection !== StreamingPreferences.VDS_FORCE_SOFTWARE) {
             if (SystemProperties.isRunningXWayland) {
                 xWaylandDialog.open()
             }
@@ -62,16 +72,28 @@ ApplicationWindow {
                 noHwDecoderDialog.open()
             }
         }
+    }
 
+    function hasUnmappedGamepadsChanged() {
         if (SystemProperties.unmappedGamepads) {
             unmappedGamepadDialog.unmappedGamepads = SystemProperties.unmappedGamepads
             unmappedGamepadDialog.open()
         }
     }
-  
+
+    // It would be better to use TextMetrics here, but it always lays out
+    // the text slightly more compactly than real Text does in ToolTip,
+    // causing unexpected line breaks to be inserted
+    Text {
+        id: tooltipTextLayoutHelper
+        visible: false
+        font: ToolTip.toolTip.font
+        text: ToolTip.toolTip.text
+    }
+
     // This configures the maximum width of the singleton attached QML ToolTip. If left unconstrained,
     // it will never insert a line break and just extend on forever.
-    ToolTip.toolTip.contentWidth: ToolTip.toolTip.implicitContentWidth < 400 ? ToolTip.toolTip.implicitContentWidth : 400
+    ToolTip.toolTip.contentWidth: Math.min(tooltipTextLayoutHelper.width, 400)
 
     function goBack() {
         if (clearOnBack) {
@@ -195,20 +217,10 @@ ApplicationWindow {
         SdlGamepadKeyNavigation.notifyWindowFocus(visible && active)
     }
 
-    // Workaround for lack of instanceof in Qt 5.9.
-    //
-    // Based on https://stackoverflow.com/questions/13923794/how-to-do-a-is-a-typeof-or-instanceof-in-qml
-    function qmltypeof(obj, className) { // QtObject, string -> bool
-        // className plus "(" is the class instance without modification
-        // className plus "_QML" is the class instance with user-defined properties
-        var str = obj.toString();
-        return str.startsWith(className + "(") || str.startsWith(className + "_QML");
-    }
-
     function navigateTo(url, objectType)
     {
         var existingItem = stackView.find(function(item, index) {
-            return qmltypeof(item, objectType)
+            return item instanceof objectType
         })
 
         if (existingItem !== null) {
@@ -275,7 +287,7 @@ ApplicationWindow {
 
             Label {
                 id: versionLabel
-                visible: qmltypeof(stackView.currentItem, "SettingsView")
+                visible: stackView.currentItem instanceof SettingsView
                 text: qsTr("Version %1").arg(SystemProperties.versionString)
                 font.pointSize: 12
                 horizontalAlignment: Qt.AlignRight
@@ -285,7 +297,7 @@ ApplicationWindow {
             NavigableToolButton {
                 id: discordButton
                 visible: SystemProperties.hasBrowser &&
-                         qmltypeof(stackView.currentItem, "SettingsView")
+                         stackView.currentItem instanceof SettingsView
 
                 iconSource: "qrc:/res/discord.svg"
 
@@ -304,7 +316,7 @@ ApplicationWindow {
 
             NavigableToolButton {
                 id: addPcButton
-                visible: qmltypeof(stackView.currentItem, "PcView")
+                visible: stackView.currentItem instanceof PcView
 
                 iconSource:  "qrc:/res/ic_add_to_queue_white_48px.svg"
 
@@ -402,7 +414,7 @@ ApplicationWindow {
 
                 iconSource: "qrc:/res/ic_videogame_asset_white_48px.svg"
 
-                onClicked: navigateTo("qrc:/gui/GamepadMapper.qml", "GamepadMapper")
+                onClicked: navigateTo("qrc:/gui/GamepadMapper.qml", GamepadMapper)
 
                 Keys.onDownPressed: {
                     stackView.currentItem.forceActiveFocus(Qt.TabFocus)
@@ -414,7 +426,7 @@ ApplicationWindow {
 
                 iconSource:  "qrc:/res/settings.svg"
 
-                onClicked: navigateTo("qrc:/gui/SettingsView.qml", "SettingsView")
+                onClicked: navigateTo("qrc:/gui/SettingsView.qml", SettingsView)
 
                 Keys.onDownPressed: {
                     stackView.currentItem.forceActiveFocus(Qt.TabFocus)

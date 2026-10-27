@@ -44,6 +44,17 @@ public:
     };
     Q_ENUM(VideoDecoderSelection)
 
+    // Mac only (for now)
+    enum RendererSelection
+    {
+        RS_PROBE_ONLY = -1, // Only valid for probing decoder properties
+        RS_AUTO,
+        RS_VULKAN,
+        RS_METAL,
+        RS_AVSBDL
+    };
+    Q_ENUM(RendererSelection)
+
     enum WindowMode
     {
         WM_FULLSCREEN,
@@ -94,6 +105,9 @@ public:
         LANG_CKB,
         LANG_LT,
         LANG_ET,
+        LANG_BG,
+        LANG_EO,
+        LANG_TA,
     };
     Q_ENUM(Language);
 
@@ -110,6 +124,7 @@ public:
     Q_PROPERTY(int fps MEMBER fps NOTIFY displayModeChanged)
     Q_PROPERTY(int bitrateKbps MEMBER bitrateKbps NOTIFY bitrateChanged)
     Q_PROPERTY(bool unlockBitrate MEMBER unlockBitrate NOTIFY unlockBitrateChanged)
+    Q_PROPERTY(bool autoAdjustBitrate MEMBER autoAdjustBitrate NOTIFY autoAdjustBitrateChanged)
     Q_PROPERTY(bool enableVsync MEMBER enableVsync NOTIFY enableVsyncChanged)
     Q_PROPERTY(bool gameOptimizations MEMBER gameOptimizations NOTIFY gameOptimizationsChanged)
     Q_PROPERTY(bool playAudioOnHost MEMBER playAudioOnHost NOTIFY playAudioOnHostChanged)
@@ -120,16 +135,18 @@ public:
     Q_PROPERTY(bool absoluteTouchMode MEMBER absoluteTouchMode NOTIFY absoluteTouchModeChanged)
     Q_PROPERTY(bool framePacing MEMBER framePacing NOTIFY framePacingChanged)
     Q_PROPERTY(bool connectionWarnings MEMBER connectionWarnings NOTIFY connectionWarningsChanged)
+    Q_PROPERTY(bool configurationWarnings MEMBER configurationWarnings NOTIFY configurationWarningsChanged)
     Q_PROPERTY(bool richPresence MEMBER richPresence NOTIFY richPresenceChanged)
     Q_PROPERTY(bool gamepadMouse MEMBER gamepadMouse NOTIFY gamepadMouseChanged)
     Q_PROPERTY(bool detectNetworkBlocking MEMBER detectNetworkBlocking NOTIFY detectNetworkBlockingChanged)
     Q_PROPERTY(bool showPerformanceOverlay MEMBER showPerformanceOverlay NOTIFY showPerformanceOverlayChanged)
-    Q_PROPERTY(bool showPerformanceOverlayLite MEMBER showPerformanceOverlayLite NOTIFY showPerformanceOverlayChanged)
+    Q_PROPERTY(bool showPerformanceOverlayLite MEMBER showPerformanceOverlayLite NOTIFY showPerformanceOverlayLiteChanged)
     Q_PROPERTY(AudioConfig audioConfig MEMBER audioConfig NOTIFY audioConfigChanged)
     Q_PROPERTY(VideoCodecConfig videoCodecConfig MEMBER videoCodecConfig NOTIFY videoCodecConfigChanged)
     Q_PROPERTY(bool enableHdr MEMBER enableHdr NOTIFY enableHdrChanged)
     Q_PROPERTY(bool enableYUV444 MEMBER enableYUV444 NOTIFY enableYUV444Changed)
     Q_PROPERTY(VideoDecoderSelection videoDecoderSelection MEMBER videoDecoderSelection NOTIFY videoDecoderSelectionChanged)
+    Q_PROPERTY(RendererSelection rendererSelection MEMBER rendererSelection NOTIFY rendererSelectionChanged)
     Q_PROPERTY(WindowMode windowMode MEMBER windowMode NOTIFY windowModeChanged)
     Q_PROPERTY(WindowMode recommendedFullScreenMode MEMBER recommendedFullScreenMode CONSTANT)
     Q_PROPERTY(UIDisplayMode uiDisplayMode MEMBER uiDisplayMode NOTIFY uiDisplayModeChanged)
@@ -150,6 +167,7 @@ public:
     int fps;
     int bitrateKbps;
     bool unlockBitrate;
+    bool autoAdjustBitrate;
     bool enableVsync;
     bool gameOptimizations;
     bool playAudioOnHost;
@@ -160,6 +178,7 @@ public:
     bool absoluteTouchMode;
     bool framePacing;
     bool connectionWarnings;
+    bool configurationWarnings;
     bool richPresence;
     bool gamepadMouse;
     bool detectNetworkBlocking;
@@ -182,11 +201,13 @@ public:
     UIDisplayMode uiDisplayMode;
     Language language;
     CaptureSysKeysMode captureSysKeysMode;
+    RendererSelection rendererSelection;
 
 signals:
     void displayModeChanged();
     void bitrateChanged();
     void unlockBitrateChanged();
+    void autoAdjustBitrateChanged();
     void enableVsyncChanged();
     void gameOptimizationsChanged();
     void playAudioOnHostChanged();
@@ -205,6 +226,7 @@ signals:
     void windowModeChanged();
     void framePacingChanged();
     void connectionWarningsChanged();
+    void configurationWarningsChanged();
     void richPresenceChanged();
     void gamepadMouseChanged();
     void detectNetworkBlockingChanged();
@@ -218,6 +240,7 @@ signals:
     void captureSysKeysModeChanged();
     void keepAwakeChanged();
     void languageChanged();
+    void rendererSelectionChanged();
 
 private:
     explicit StreamingPreferences(QQmlEngine *qmlEngine);

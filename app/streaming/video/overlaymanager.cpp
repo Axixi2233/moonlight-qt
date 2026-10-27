@@ -9,7 +9,6 @@ OverlayManager::OverlayManager() :
 {
     memset(m_Overlays, 0, sizeof(m_Overlays));
 
-    // m_Overlays[OverlayType::OverlayDebug].color = {0xD0, 0xD0, 0x00, 0xFF};
     m_Overlays[OverlayType::OverlayDebug].color = { 0xFF, 0xFF, 0xFF, 0xFF };
     m_Overlays[OverlayType::OverlayDebug].fontSize = 22;
     m_Overlays[OverlayType::OverlayDebug].bgcolor = { 0x00, 0x00, 0x00, 0x50 };
@@ -62,9 +61,7 @@ char* OverlayManager::getOverlayText(OverlayType type)
 
 void OverlayManager::updateOverlayText(OverlayType type, const char* text)
 {
-    strncpy(m_Overlays[type].text, text, sizeof(m_Overlays[0].text));
-    m_Overlays[type].text[getOverlayMaxTextLength() - 1] = '\0';
-
+    SDL_utf8strlcpy(m_Overlays[type].text, text, sizeof(m_Overlays[0].text));
     setOverlayTextUpdated(type);
 }
 
@@ -110,7 +107,8 @@ void OverlayManager::setOverlayState(OverlayType type, bool enabled)
     }
 }
 
-void OverlayManager::setOverlayStateLite(OverlayType type, bool enabled){
+void OverlayManager::setOverlayStateLite(OverlayType type, bool enabled)
+{
     m_Overlays[type].enabledLite = enabled;
 }
 
@@ -157,32 +155,84 @@ void OverlayManager::notifyOverlayUpdated(OverlayType type)
         }
     }
 
-    SDL_Surface* oldSurface = (SDL_Surface*)SDL_AtomicSetPtr((void**)&m_Overlays[type].surface, nullptr);
+    SDL_Surface* surface = nullptr;
+    if (m_Overlays[type].enabled) {
+        TTF_SetFontWrappedAlign(m_Overlays[type].font, TTF_WRAPPED_ALIGN_CENTER);
+        // Lite statistics use a single line. A zero wrap width still honors
+        // explicit newlines without introducing additional wrapping.
+        const int wrapWidth = type == OverlayDebug ? (m_Overlays[type].enabledLite ? 0 : 1224) : 1024;
+        surface = RenderTextOutlinedWrapped(m_Overlays[type].font,
+                                            m_Overlays[type].text,
+                                            m_Overlays[type].color,
+                                            {0, 0, 0, 255}, 4, wrapWidth);
+        if (surface != nullptr && type == OverlayDebug) {
+            // Keep Axixi's translucent background while retaining the upstream
+            // UTF-8 outline rendering and surface ownership protocol.
+            SDL_Surface* background = SDL_CreateRGBSurfaceWithFormat(0, surface->w, surface->h,
+                                                                     32, SDL_PIXELFORMAT_ARGB8888);
+            if (background != nullptr) {
+                const SDL_Color color = m_Overlays[type].bgcolor;
+                SDL_FillRect(background, nullptr, SDL_MapRGBA(background->format, color.r, color.g, color.b, color.a));
+                SDL_BlitSurface(surface, nullptr, background, nullptr);
+                SDL_FreeSurface(surface);
+                surface = background;
+            }
+        }
+    }
+
+    // Transfer ownership atomically, including when the overlay is disabled.
+    SDL_Surface* oldSurface = (SDL_Surface*)SDL_AtomicSetPtr((void**)&m_Overlays[type].surface, surface);
+
+    // Notify the renderer
+    m_Renderer->notifyOverlayUpdated(type);
 
     // Free the old surface
     if (oldSurface != nullptr) {
         SDL_FreeSurface(oldSurface);
     }
+}
 
-    if (m_Overlays[type].enabled) {
-        TTF_SetFontWrappedAlign(m_Overlays[type].font, TTF_WRAPPED_ALIGN_CENTER);
-        // The _Wrapped variant is required for line breaks to work TTF_RenderText_Blended_Wrapped
-        if(type==Overlay::OverlayDebug&&m_Overlays[type].enabledLite){
-            SDL_Surface* surface = TTF_RenderUTF8_LCD(m_Overlays[type].font,
-                                                      m_Overlays[type].text,
-                                                      m_Overlays[type].color,
-                                                      m_Overlays[type].bgcolor);
-            SDL_AtomicSetPtr((void**)&m_Overlays[type].surface, surface);
-        }else{
-            SDL_Surface* surface = TTF_RenderUTF8_LCD_Wrapped(m_Overlays[type].font,
-                                                      m_Overlays[type].text,
-                                                      m_Overlays[type].color,
-                                                      m_Overlays[type].bgcolor,
-                                                      1224);
-            SDL_AtomicSetPtr((void**)&m_Overlays[type].surface, surface);
+SDL_Surface* OverlayManager::RenderTextOutlinedWrapped(TTF_Font* font, const char* text, SDL_Color textColor, SDL_Color outlineColor, int outlineWidth, int wrapWidth) {
+    if (text == nullptr || text[0] == '\0') {
+        return nullptr;
+    }
+
+    int oldOutline = TTF_GetFontOutline(font);
+    TTF_SetFontOutline(font, outlineWidth);
+
+    // Verify that the string won't require wrapping (which could cause the outline and the text
+    // to diverge due to different wrapping positions).
+    //
+    // A zero wrap width is used for Axixi's unwrapped lite presentation.
+    if (wrapWidth > 0) {
+        for (const QString& line : QString::fromUtf8(text).split('\n')) {
+            int extent, count;
+            if (TTF_MeasureUTF8(font, line.toUtf8(), wrapWidth, &extent, &count) == 0 && count < line.size()) {
+                // If it requires wrapping, render it without the outline
+                TTF_SetFontOutline(font, oldOutline);
+                return TTF_RenderUTF8_Blended_Wrapped(font, text, textColor, wrapWidth);
+            }
         }
     }
 
-    // Notify the renderer
-    m_Renderer->notifyOverlayUpdated(type);
+    // Draw text twice, but outline is a bit bigger
+    auto outlineSurface = TTF_RenderUTF8_Blended_Wrapped(font, text, outlineColor, wrapWidth);
+    TTF_SetFontOutline(font, 0);
+    auto textSurface = TTF_RenderUTF8_Blended_Wrapped(font, text, textColor, wrapWidth);
+    TTF_SetFontOutline(font, oldOutline);
+
+    if (outlineSurface == nullptr || textSurface == nullptr) {
+        SDL_FreeSurface(outlineSurface);
+        SDL_FreeSurface(textSurface);
+        return nullptr;
+    }
+
+    // Merge the texts
+    // Wrapped, centered layers can have the same width. A fixed outlineWidth
+    // offset would shift the foreground to the right of its outline.
+    SDL_Rect dst = { (outlineSurface->w - textSurface->w) / 2, outlineWidth, textSurface->w, textSurface->h };
+    SDL_BlitSurface(textSurface, nullptr, outlineSurface, &dst);
+
+    SDL_FreeSurface(textSurface);
+    return outlineSurface;
 }

@@ -1,5 +1,5 @@
 QT += core quick network quickcontrols2 svg
-CONFIG += c++11
+CONFIG += c++17
 
 unix:!macx {
     TARGET = moonlight
@@ -36,35 +36,29 @@ DEFINES += QT_DEPRECATED_WARNINGS
 DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 win32 {
-    contains(QT_ARCH, i386) {
-        LIBS += -L$$PWD/../libs/windows/lib/x86
-        INCLUDEPATH += $$PWD/../libs/windows/include/x86
+    !exists($$PWD/../libs/windows) {
+        error("Missing dependencies. Please run 'powershell .\setup-deps.ps1' to fetch prebuilt libraries.")
     }
+
     contains(QT_ARCH, x86_64) {
         LIBS += -L$$PWD/../libs/windows/lib/x64
-        INCLUDEPATH += $$PWD/../libs/windows/include/x64
+        INCLUDEPATH += $$PWD/../libs/windows/include/x64 $$PWD/../libs/windows/include/x64/SDL2
     }
     contains(QT_ARCH, arm64) {
         LIBS += -L$$PWD/../libs/windows/lib/arm64
-        INCLUDEPATH += $$PWD/../libs/windows/include/arm64
+        INCLUDEPATH += $$PWD/../libs/windows/include/arm64 $$PWD/../libs/windows/include/arm64/SDL2
     }
 
     INCLUDEPATH += $$PWD/../libs/windows/include
     LIBS += ws2_32.lib winmm.lib dxva2.lib ole32.lib gdi32.lib user32.lib d3d9.lib dwmapi.lib dbghelp.lib
-
-    # Work around a conflict with math.h inclusion between SDL and Qt 6
-    DEFINES += _USE_MATH_DEFINES
 }
 macx:!disable-prebuilts {
-    INCLUDEPATH += $$PWD/../libs/mac/include
-    INCLUDEPATH += $$PWD/../libs/mac/Frameworks/SDL2.framework/Versions/A/Headers
-    INCLUDEPATH += $$PWD/../libs/mac/Frameworks/SDL2_ttf.framework/Versions/A/Headers
-    LIBS += -L$$PWD/../libs/mac/lib -F$$PWD/../libs/mac/Frameworks
+    !exists($$PWD/../libs/mac) {
+        error("Missing dependencies. Please run 'python3 setup-deps.py' to fetch prebuilt libraries.")
+    }
 
-    # QMake doesn't handle framework-style includes correctly on its own
-    QMAKE_CFLAGS += -F$$PWD/../libs/mac/Frameworks
-    QMAKE_CXXFLAGS += -F$$PWD/../libs/mac/Frameworks
-    QMAKE_OBJECTIVE_CFLAGS += -F$$PWD/../libs/mac/Frameworks
+    INCLUDEPATH += $$PWD/../libs/mac/include $$PWD/../libs/mac/include/SDL2
+    LIBS += -L$$PWD/../libs/mac/lib
 }
 
 unix:if(!macx|disable-prebuilts) {
@@ -122,7 +116,9 @@ unix:if(!macx|disable-prebuilts) {
                 }
             }
 
-            !disable-cuda {
+            # Disabled by default due to reliability issues. See #1314.
+            # CUDA interop is superseded by VDPAU and Vulkan Video.
+            enable-cuda {
                 packagesExist(ffnvcodec) {
                     PKGCONFIG += ffnvcodec
                     CONFIG += cuda
@@ -157,20 +153,16 @@ win32 {
     CONFIG += ffmpeg libplacebo
 }
 win32:!winrt {
-    CONFIG += soundio discord-rpc
+    CONFIG += discord-rpc
 }
 macx {
     !disable-prebuilts {
-        LIBS += -lssl.3 -lcrypto.3 -lavcodec.61 -lavutil.59 -lswscale.8 -lopus -framework SDL2 -framework SDL2_ttf
-        CONFIG += discord-rpc
+        LIBS += -lssl.3 -lcrypto.3 -lavcodec.63 -lavutil.61 -lswscale.10 -lopus.0 -lSDL2 -lSDL2_ttf -lplacebo
+        CONFIG += discord-rpc libplacebo
     }
 
     LIBS += -lobjc -framework VideoToolbox -framework AVFoundation -framework CoreVideo -framework CoreGraphics -framework CoreMedia -framework AppKit -framework Metal -framework QuartzCore
-
-    # For libsoundio
-    LIBS += -framework CoreAudio -framework AudioUnit
-
-    CONFIG += ffmpeg soundio
+    CONFIG += ffmpeg
 }
 
 SOURCES += \
@@ -204,6 +196,7 @@ SOURCES += \
     streaming/audio/renderers/sdlaud.cpp \
     gui/computermodel.cpp \
     gui/appmodel.cpp \
+    streaming/bandwidth.cpp \
     streaming/streamutils.cpp \
     backend/autoupdatechecker.cpp \
     path.cpp \
@@ -241,6 +234,7 @@ HEADERS += \
     gui/computermodel.h \
     gui/appmodel.h \
     streaming/video/decoder.h \
+    streaming/bandwidth.h \
     streaming/streamutils.h \
     backend/autoupdatechecker.h \
     path.h \
@@ -329,9 +323,12 @@ libdrm {
     HEADERS += streaming/video/ffmpeg-renderers/drm.h
 
     linux {
-        message(Master hooks enabled)
-        SOURCES += masterhook.c masterhook_internal.c
-        LIBS += -ldl
+        !disable-masterhooks {
+            message(Master hooks enabled)
+            DEFINES += HAVE_DRM_MASTER_HOOKS
+            SOURCES += masterhook.c masterhook_internal.c
+            LIBS += -ldl -pthread
+        }
     }
 }
 cuda {
@@ -353,6 +350,10 @@ libplacebo {
         streaming/video/ffmpeg-renderers/plvk_c.c
     HEADERS += \
         streaming/video/ffmpeg-renderers/plvk.h
+
+    macx {
+        SOURCES += streaming/video/ffmpeg-renderers/plvk_objc.mm
+    }
 }
 config_EGL {
     message(EGL renderer selected)
@@ -413,13 +414,6 @@ macx {
 
     HEADERS += \
         streaming/video/ffmpeg-renderers/vt.h
-}
-soundio {
-    message(libsoundio audio renderer selected)
-
-    DEFINES += HAVE_SOUNDIO SOUNDIO_STATIC_LIBRARY
-    SOURCES += streaming/audio/renderers/soundioaudiorenderer.cpp
-    HEADERS += streaming/audio/renderers/soundioaudiorenderer.h
 }
 discord-rpc {
     message(Discord integration enabled)
@@ -486,7 +480,10 @@ TRANSLATIONS += \
     languages/qml_he.ts \
     languages/qml_ckb.ts \
     languages/qml_lt.ts \
-    languages/qml_et.ts
+    languages/qml_et.ts \
+    languages/qml_bg.ts \
+    languages/qml_eo.ts \
+    languages/qml_ta.ts
 
 # Additional import path used to resolve QML modules in Qt Creator's code model
 QML_IMPORT_PATH =
@@ -508,21 +505,12 @@ else:unix: LIBS += -L$$OUT_PWD/../qmdnsengine/ -lqmdnsengine
 INCLUDEPATH += $$PWD/../qmdnsengine/qmdnsengine/src/include $$PWD/../qmdnsengine
 DEPENDPATH += $$PWD/../qmdnsengine/qmdnsengine/src/include $$PWD/../qmdnsengine
 
-soundio {
-    win32:CONFIG(release, debug|release): LIBS += -L$$OUT_PWD/../soundio/release/ -lsoundio
-    else:win32:CONFIG(debug, debug|release): LIBS += -L$$OUT_PWD/../soundio/debug/ -lsoundio
-    else:unix: LIBS += -L$$OUT_PWD/../soundio/ -lsoundio
-
-    INCLUDEPATH += $$PWD/../soundio/libsoundio
-    DEPENDPATH += $$PWD/../soundio/libsoundio
-}
-
 win32:CONFIG(release, debug|release): LIBS += -L$$OUT_PWD/../h264bitstream/release/ -lh264bitstream
 else:win32:CONFIG(debug, debug|release): LIBS += -L$$OUT_PWD/../h264bitstream/debug/ -lh264bitstream
 else:unix: LIBS += -L$$OUT_PWD/../h264bitstream/ -lh264bitstream
 
-INCLUDEPATH += $$PWD/../h264bitstream/h264bitstream
-DEPENDPATH += $$PWD/../h264bitstream/h264bitstream
+INCLUDEPATH += $$PWD/../h264bitstream
+DEPENDPATH += $$PWD/../h264bitstream
 
 !winrt {
     win32:CONFIG(release, debug|release): LIBS += -L$$OUT_PWD/../AntiHooking/release/ -lAntiHooking
